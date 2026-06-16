@@ -19,12 +19,19 @@ import requests
 from models import NFeDados, GuiaGerada
 
 _GNRE_NS = "http://www.gnre.pe.gov.br"
-_WS_PROD = "https://www.gnre.pe.gov.br/gnreWS/services/GnreDebitoSincrono"
-_WS_HOMOLOG = "https://www.gnre.pe.gov.br/gnreHWS/services/GnreDebitoSincrono"
+_WS_PROD = os.getenv(
+    "GNRE_WS_URL_PROD",
+    "https://www.gnre.pe.gov.br/gnreWS/services/GnreDebitoSincrono",
+)
+_WS_HOMOLOG = os.getenv(
+    "GNRE_WS_URL_HOMOLOG",
+    "https://www.gnre.pe.gov.br/gnreHWS/services/GnreDebitoSincrono",
+)
 
 _TP_AMB = os.getenv("GNRE_AMBIENTE", "2")  # 2=homolog, 1=prod
 _CERT = os.getenv("CERT_PATH", "")
 _KEY = os.getenv("KEY_PATH", "")
+_SSL_VERIFY = os.getenv("GNRE_SSL_VERIFY", "true").lower() not in ("false", "0", "no")
 
 # Only use cert if both paths are configured AND files actually exist
 def _cert_configured() -> bool:
@@ -150,7 +157,7 @@ def _call_webservice(gnre_xml: str, cert_override: tuple[str, str] | None = None
             "SOAPAction": '""',
         },
         "timeout": 30,
-        "verify": True,
+        "verify": _SSL_VERIFY,
     }
     # Use empresa cert if provided, fall back to global .env cert
     cert = cert_override or ((_CERT, _KEY) if _cert_configured() else None)
@@ -166,7 +173,11 @@ def _call_webservice(gnre_xml: str, cert_override: tuple[str, str] | None = None
     except requests.exceptions.ConnectionError as exc:
         raise RuntimeError(f"Não foi possível conectar ao WebService GNRE: {exc}") from exc
     except requests.exceptions.HTTPError as exc:
-        raise RuntimeError(f"WebService GNRE retornou erro HTTP {resp.status_code}") from exc
+        body_preview = resp.text[:300] if resp.text else "(sem corpo)"
+        raise RuntimeError(
+            f"WebService GNRE retornou HTTP {resp.status_code}. "
+            f"URL: {url} | Resposta: {body_preview}"
+        ) from exc
 
 
 def _parse_ws_response(xml_text: str) -> dict:
