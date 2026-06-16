@@ -1150,7 +1150,13 @@ function renderEmpresaForm(emp) {
       <div class="grid">
         <div class="field full">
           <label>CNPJ *</label>
-          <input type="text" id="ef-cnpj" value="${emp?.cnpj ? fmtCNPJ(emp.cnpj) : ''}" ${isEdit ? 'readonly style="background:var(--gray-100)"' : ''} maxlength="18" oninput="maskCNPJ(this)" placeholder="00.000.000/0000-00">
+          <div style="display:flex;gap:.5rem;align-items:center">
+            <input type="text" id="ef-cnpj" value="${emp?.cnpj ? fmtCNPJ(emp.cnpj) : ''}" ${isEdit ? 'readonly style="background:var(--gray-100)"' : ''} maxlength="18" oninput="maskCNPJ(this)" placeholder="00.000.000/0000-00" style="flex:1">
+            ${!isEdit ? `<button type="button" class="btn btn-secondary" id="btn-buscar-cnpj" onclick="buscarCNPJ()" style="white-space:nowrap;flex-shrink:0">
+              🔍 Buscar CNPJ
+            </button>` : ''}
+          </div>
+          <span class="hint" id="cnpj-hint"></span>
         </div>
         <div class="field full">
           <label>Razão Social *</label>
@@ -1369,6 +1375,84 @@ async function removerCertificado(cnpj) {
   } catch(e) {
     showToast('Erro: ' + e.message, 'error');
   }
+}
+
+async function buscarCNPJ() {
+  const input = document.getElementById('ef-cnpj');
+  const hint = document.getElementById('cnpj-hint');
+  const btn = document.getElementById('btn-buscar-cnpj');
+  const cnpj = onlyDigits(input.value);
+
+  if (cnpj.length !== 14) {
+    hint.style.color = 'var(--red)';
+    hint.textContent = 'Digite o CNPJ completo antes de buscar.';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Buscando...';
+  hint.textContent = '';
+
+  try {
+    const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || `CNPJ não encontrado (${res.status})`);
+    }
+    const d = await res.json();
+
+    // Preencher campos
+    document.getElementById('ef-nome').value = d.razao_social || '';
+    document.getElementById('ef-fantasia').value = d.nome_fantasia || '';
+
+    // UF
+    const ufSel = document.getElementById('ef-uf');
+    if (d.uf) {
+      for (const opt of ufSel.options) {
+        if (opt.value === d.uf) { opt.selected = true; break; }
+      }
+    }
+
+    // IE — alguns retornos incluem qsa ou atividade, mas IE não vem da API pública
+    // Deixamos em branco para o usuário preencher
+
+    // Endereço
+    if (d.codigo_municipio_ibge)
+      document.getElementById('ef-mun-cod').value = d.codigo_municipio_ibge;
+    if (d.municipio)
+      document.getElementById('ef-mun-nome').value = toTitleCase(d.municipio);
+    if (d.cep) {
+      const cep = d.cep.replace(/\D/g, '');
+      document.getElementById('ef-cep').value = cep.length === 8 ? cep.replace(/(\d{5})(\d{3})/, '$1-$2') : d.cep;
+    }
+    if (d.logradouro)
+      document.getElementById('ef-logr').value = toTitleCase(d.logradouro);
+    if (d.numero)
+      document.getElementById('ef-num').value = d.numero;
+    if (d.complemento)
+      document.getElementById('ef-compl').value = toTitleCase(d.complemento);
+    if (d.bairro)
+      document.getElementById('ef-bairro').value = toTitleCase(d.bairro);
+
+    hint.style.color = 'var(--green)';
+    const situacao = d.descricao_situacao_cadastral || d.situacao_cadastral || '';
+    hint.textContent = `✓ Dados carregados${situacao ? ' · Situação: ' + situacao : ''}. Verifique a IE antes de salvar.`;
+
+  } catch (e) {
+    hint.style.color = 'var(--red)';
+    hint.textContent = '✗ ' + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔍 Buscar CNPJ';
+  }
+}
+
+function toTitleCase(str) {
+  if (!str) return '';
+  const minors = new Set(['de','da','do','das','dos','e','em','a','o','na','no']);
+  return str.toLowerCase().split(' ')
+    .map((w, i) => (i === 0 || !minors.has(w)) ? w.charAt(0).toUpperCase() + w.slice(1) : w)
+    .join(' ');
 }
 
 async function confirmarExcluir(cnpj) {
