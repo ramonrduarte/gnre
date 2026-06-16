@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.env
+data/
+.git/
+.gitignore
+*.md
+setup.bat
+docker-compose.yml
+portainer-stack.yml

@@ -1,0 +1,1393 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gerador de Guias DIFAL / GNRE</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --blue: #1a56db;
+    --blue-dark: #1e429f;
+    --green: #057a55;
+    --yellow: #c27803;
+    --red: #c81e1e;
+    --gray-50: #f9fafb;
+    --gray-100: #f3f4f6;
+    --gray-200: #e5e7eb;
+    --gray-300: #d1d5db;
+    --gray-600: #4b5563;
+    --gray-700: #374151;
+    --gray-900: #111827;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--gray-50);
+    color: var(--gray-900);
+    min-height: 100vh;
+  }
+
+  header {
+    background: var(--blue-dark);
+    color: white;
+    padding: 1rem 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,.2);
+  }
+  header h1 { font-size: 1.3rem; font-weight: 700; }
+  header span { font-size: .85rem; opacity: .75; }
+
+  .container { max-width: 960px; margin: 0 auto; padding: 2rem 1rem; }
+
+  /* Empresa list */
+  .empresa-card {
+    border: 1px solid var(--gray-200);
+    border-radius: 8px;
+    padding: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    cursor: pointer;
+    transition: all .15s;
+    margin-bottom: .5rem;
+  }
+  .empresa-card:hover { border-color: var(--blue); background: #f0f7ff; }
+  .empresa-card.selected { border-color: var(--blue); background: #eff6ff; }
+  .empresa-avatar {
+    width: 42px; height: 42px;
+    border-radius: 8px;
+    background: var(--blue-dark);
+    color: white;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 1rem;
+    flex-shrink: 0;
+  }
+  .empresa-info { flex: 1; min-width: 0; }
+  .empresa-nome { font-weight: 600; font-size: .95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .empresa-cnpj { font-size: .8rem; color: var(--gray-600); }
+  .cert-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .cert-dot.green { background: #10b981; }
+  .cert-dot.yellow { background: #f59e0b; }
+  .cert-dot.red { background: #ef4444; }
+  .cert-dot.gray { background: var(--gray-300); }
+
+  /* Certificate upload area */
+  .cert-upload-zone {
+    border: 2px dashed var(--gray-300);
+    border-radius: 8px;
+    padding: 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all .2s;
+    background: var(--gray-50);
+    margin-bottom: .75rem;
+  }
+  .cert-upload-zone:hover, .cert-upload-zone.drag-over {
+    border-color: var(--blue); background: #eff6ff;
+  }
+  .cert-upload-zone input { display: none; }
+  .cert-badge {
+    display: inline-flex; align-items: center; gap: .4rem;
+    padding: .3rem .8rem;
+    border-radius: 20px;
+    font-size: .8rem; font-weight: 600;
+  }
+  .cert-badge.valido { background: #d1fae5; color: #065f46; }
+  .cert-badge.expirando { background: #fef3c7; color: #92400e; }
+  .cert-badge.expirado { background: #fee2e2; color: #991b1b; }
+  .cert-badge.sem { background: var(--gray-100); color: var(--gray-600); }
+
+  .section-divider {
+    font-size: .7rem; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--gray-600); font-weight: 700;
+    margin: 1.25rem 0 .75rem;
+    display: flex; align-items: center; gap: .5rem;
+  }
+  .section-divider::after {
+    content: ''; flex: 1;
+    height: 1px; background: var(--gray-200);
+  }
+
+  /* Tab navigation */
+  .tabs { display: flex; gap: .25rem; border-bottom: 2px solid var(--gray-200); margin-bottom: 1.5rem; }
+  .tab-btn {
+    padding: .6rem 1.2rem;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: .95rem;
+    color: var(--gray-600);
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    border-radius: 4px 4px 0 0;
+    transition: all .15s;
+  }
+  .tab-btn:hover { background: var(--gray-100); color: var(--blue); }
+  .tab-btn.active { color: var(--blue); border-bottom-color: var(--blue); font-weight: 600; }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* Cards */
+  .card {
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,.05);
+  }
+  .card h2 { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: var(--gray-700); }
+
+  /* Form elements */
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .75rem; }
+  .grid-2 { grid-template-columns: 1fr 1fr; }
+  .full { grid-column: 1 / -1; }
+
+  .field { display: flex; flex-direction: column; gap: .25rem; }
+  label { font-size: .8rem; font-weight: 600; color: var(--gray-600); text-transform: uppercase; letter-spacing: .03em; }
+  input, select, textarea {
+    border: 1px solid var(--gray-300);
+    border-radius: 6px;
+    padding: .5rem .75rem;
+    font-size: .9rem;
+    color: var(--gray-900);
+    background: white;
+    width: 100%;
+    transition: border .15s;
+  }
+  input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(26,86,219,.1);
+  }
+  input.required-missing { border-color: var(--red); }
+  .hint { font-size: .75rem; color: var(--gray-600); margin-top: .1rem; }
+
+  /* Drop zone */
+  .dropzone {
+    border: 2px dashed var(--gray-300);
+    border-radius: 8px;
+    padding: 3rem 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all .2s;
+    background: var(--gray-50);
+  }
+  .dropzone:hover, .dropzone.drag-over {
+    border-color: var(--blue);
+    background: #eff6ff;
+  }
+  .dropzone input[type="file"] { display: none; }
+  .dropzone .icon { font-size: 2.5rem; margin-bottom: .5rem; }
+  .dropzone p { color: var(--gray-600); font-size: .9rem; }
+  .dropzone .filename { margin-top: .5rem; font-weight: 600; color: var(--blue); }
+
+  /* JSON textarea */
+  .json-editor {
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: .85rem;
+    line-height: 1.5;
+    min-height: 280px;
+    resize: vertical;
+  }
+
+  /* Buttons */
+  .btn {
+    padding: .6rem 1.4rem;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: .9rem;
+    font-weight: 600;
+    transition: all .15s;
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+  }
+  .btn-primary { background: var(--blue); color: white; }
+  .btn-primary:hover { background: var(--blue-dark); }
+  .btn-secondary { background: var(--gray-100); color: var(--gray-700); border: 1px solid var(--gray-300); }
+  .btn-secondary:hover { background: var(--gray-200); }
+  .btn-sm { padding: .35rem .8rem; font-size: .8rem; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-row { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: 1.25rem; }
+
+  /* UF rate info badge */
+  .uf-info {
+    display: none;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 6px;
+    padding: .5rem .75rem;
+    font-size: .8rem;
+    color: var(--blue-dark);
+    margin-top: .5rem;
+  }
+  .uf-info.visible { display: block; }
+
+  /* Loading */
+  .spinner {
+    display: inline-block;
+    width: 18px; height: 18px;
+    border: 3px solid rgba(255,255,255,.4);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Results */
+  #results { display: none; }
+  #results.visible { display: block; }
+
+  .result-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: .5rem;
+    margin-bottom: 1rem;
+  }
+  .result-title { font-size: 1.1rem; font-weight: 700; }
+  .result-sub { font-size: .85rem; color: var(--gray-600); margin-top: .2rem; }
+
+  .calculo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: .75rem;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1.25rem;
+  }
+  .calculo-item label { font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; color: var(--gray-600); }
+  .calculo-item .value { font-size: 1.05rem; font-weight: 700; color: var(--gray-900); margin-top: .1rem; }
+  .calculo-item .value.money { color: var(--green); }
+  .calculo-item .value.total { color: var(--blue-dark); font-size: 1.15rem; }
+
+  /* Guide cards */
+  .guide-card {
+    border: 1px solid var(--gray-200);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 1rem;
+  }
+  .guide-header {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    padding: .75rem 1rem;
+    background: var(--gray-50);
+    border-bottom: 1px solid var(--gray-200);
+  }
+  .guide-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    padding: .2rem .6rem;
+    border-radius: 20px;
+    font-size: .75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  .badge-gnre { background: #dbeafe; color: #1e429f; }
+  .badge-dare { background: #fce7f3; color: #9d174d; }
+  .badge-gerada { background: #d1fae5; color: #065f46; }
+  .badge-pendente { background: #fef3c7; color: #92400e; }
+  .badge-erro { background: #fee2e2; color: #991b1b; }
+
+  .guide-body { padding: 1rem; }
+  .guide-desc { font-weight: 600; font-size: .95rem; }
+  .guide-valor { font-size: 1.4rem; font-weight: 800; color: var(--green); margin: .25rem 0 .5rem; }
+  .guide-meta { font-size: .8rem; color: var(--gray-600); }
+
+  .barcode-line {
+    background: var(--gray-100);
+    border: 1px solid var(--gray-200);
+    border-radius: 6px;
+    padding: .6rem 1rem;
+    font-family: monospace;
+    font-size: .85rem;
+    word-break: break-all;
+    margin: .75rem 0;
+    color: var(--gray-700);
+  }
+
+  .guide-actions { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .75rem; }
+
+  .alert {
+    padding: .75rem 1rem;
+    border-radius: 6px;
+    font-size: .85rem;
+    margin-top: .5rem;
+    white-space: pre-line;
+  }
+  .alert-warning { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+  .alert-error { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+  .alert-info { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e429f; }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 1.5rem; right: 1.5rem;
+    background: var(--gray-900);
+    color: white;
+    padding: .75rem 1.25rem;
+    border-radius: 8px;
+    font-size: .875rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,.3);
+    opacity: 0;
+    transform: translateY(8px);
+    transition: all .3s;
+    pointer-events: none;
+    z-index: 999;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  /* Portal link */
+  .portal-bar {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    padding: .75rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: .5rem;
+    font-size: .85rem;
+  }
+  .portal-bar a { color: var(--blue); font-weight: 600; text-decoration: none; }
+  .portal-bar a:hover { text-decoration: underline; }
+
+  @media (max-width: 600px) {
+    .grid-2 { grid-template-columns: 1fr; }
+    .calculo-grid { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Gerador de Guias DIFAL / GNRE</h1>
+    <span>GNRE nacional · DARE-ICMS SP · EC 87/2015</span>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Tab navigation -->
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="tab-xml">📄 Upload XML NF-e</button>
+    <button class="tab-btn" data-tab="tab-manual">✏️ Formulário Manual</button>
+    <button class="tab-btn" data-tab="tab-api">🔌 API / JSON</button>
+    <button class="tab-btn" data-tab="tab-empresas">🏢 Empresas</button>
+  </div>
+
+  <!-- ── Tab 1: XML Upload ─────────────────────────────────────────────── -->
+  <div id="tab-xml" class="tab-panel active">
+    <div class="card">
+      <h2>Selecione o XML da NF-e</h2>
+      <div class="dropzone" id="dropzone" onclick="document.getElementById('xml-file').click()">
+        <input type="file" id="xml-file" accept=".xml" onchange="handleFileSelect(event)">
+        <div class="icon">📂</div>
+        <p>Clique ou arraste o arquivo XML da NF-e aqui</p>
+        <p style="font-size:.75rem;margin-top:.3rem;opacity:.7">Formatos aceitos: NFe e nfeProc (NF-e 4.0)</p>
+        <div class="filename" id="xml-filename"></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btn-xml" onclick="gerarPorXML()" disabled>
+          <span>Gerar Guias</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Tab 2: Manual Form ────────────────────────────────────────────── -->
+  <div id="tab-manual" class="tab-panel">
+
+    <div class="card">
+      <h2>Emitente (remetente da NF-e)</h2>
+      <div class="grid">
+        <div class="field full">
+          <label>CNPJ do Emitente *</label>
+          <input type="text" id="m-cnpj-emit" placeholder="00.000.000/0000-00" maxlength="18" oninput="maskCNPJ(this)">
+        </div>
+        <div class="field full">
+          <label>Razão Social *</label>
+          <input type="text" id="m-nome-emit" placeholder="Empresa Vendedora Ltda">
+        </div>
+        <div class="field">
+          <label>UF do Emitente *</label>
+          <select id="m-uf-emit" onchange="onUFEmitChange()">
+            <option value="">Selecione</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>IE do Emitente</label>
+          <input type="text" id="m-ie-emit" placeholder="000.000.000.000 ou ISENTO">
+        </div>
+        <div class="field">
+          <label>Cód. IBGE Município</label>
+          <input type="text" id="m-mun-emit" placeholder="3550308" maxlength="7">
+        </div>
+        <div class="field">
+          <label>CEP</label>
+          <input type="text" id="m-cep-emit" placeholder="00000-000" maxlength="9" oninput="maskCEP(this)">
+        </div>
+        <div class="field full">
+          <label>Logradouro</label>
+          <input type="text" id="m-logr-emit" placeholder="Av. Paulista">
+        </div>
+        <div class="field">
+          <label>Número</label>
+          <input type="text" id="m-num-emit" placeholder="1000">
+        </div>
+        <div class="field">
+          <label>Bairro</label>
+          <input type="text" id="m-bairro-emit">
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Destinatário (comprador)</h2>
+      <div class="grid">
+        <div class="field full">
+          <label>Nome / Razão Social *</label>
+          <input type="text" id="m-nome-dest" placeholder="Comprador Final">
+        </div>
+        <div class="field">
+          <label>CNPJ do Destinatário</label>
+          <input type="text" id="m-cnpj-dest" placeholder="00.000.000/0000-00" maxlength="18" oninput="maskCNPJ(this)">
+        </div>
+        <div class="field">
+          <label>CPF do Destinatário</label>
+          <input type="text" id="m-cpf-dest" placeholder="000.000.000-00" maxlength="14" oninput="maskCPF(this)">
+        </div>
+        <div class="field">
+          <label>UF Destinatário *</label>
+          <select id="m-uf-dest" onchange="onUFDestChange()">
+            <option value="">Selecione</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Cód. IBGE Município</label>
+          <input type="text" id="m-mun-dest" placeholder="3304557" maxlength="7">
+        </div>
+        <div class="field">
+          <label>CEP</label>
+          <input type="text" id="m-cep-dest" placeholder="00000-000" maxlength="9" oninput="maskCEP(this)">
+        </div>
+        <div class="field full">
+          <label>Logradouro</label>
+          <input type="text" id="m-logr-dest">
+        </div>
+        <div class="field">
+          <label>Número</label>
+          <input type="text" id="m-num-dest">
+        </div>
+        <div class="field">
+          <label>Bairro</label>
+          <input type="text" id="m-bairro-dest">
+        </div>
+      </div>
+      <div class="uf-info" id="uf-dest-info"></div>
+    </div>
+
+    <div class="card">
+      <h2>Dados da NF-e e Valores DIFAL</h2>
+      <div class="grid">
+        <div class="field full">
+          <label>Chave de Acesso NF-e (44 dígitos)</label>
+          <input type="text" id="m-chave" placeholder="35240612345678000195550010000001231000012345" maxlength="44">
+          <span class="hint">Opcional — usado como referência no documento GNRE</span>
+        </div>
+        <div class="field">
+          <label>Número NF</label>
+          <input type="text" id="m-nnf" placeholder="123">
+        </div>
+        <div class="field">
+          <label>Série</label>
+          <input type="text" id="m-serie" placeholder="1">
+        </div>
+        <div class="field">
+          <label>Data de Emissão</label>
+          <input type="date" id="m-dh-emi">
+        </div>
+        <div class="field">
+          <label>Base de Cálculo DIFAL (R$) *</label>
+          <input type="number" id="m-bc-difal" placeholder="1000.00" step="0.01" min="0">
+          <span class="hint">Valor da operação (base para cálculo do DIFAL)</span>
+        </div>
+        <div class="field">
+          <label>Data de Vencimento</label>
+          <input type="date" id="m-data-pag">
+        </div>
+        <div class="field">
+          <label>Produto Importado?</label>
+          <select id="m-importado">
+            <option value="false">Não (alíq. interestadual padrão)</option>
+            <option value="true">Sim (alíq. interestadual 4% — Conv. 123/2012)</option>
+          </select>
+        </div>
+      </div>
+
+      <details style="margin-top:1rem">
+        <summary style="cursor:pointer;font-size:.85rem;color:var(--gray-600)">Sobrescrever alíquotas (opcional)</summary>
+        <div class="grid" style="margin-top:.75rem">
+          <div class="field">
+            <label>Alíq. Interna Destino (%)</label>
+            <input type="number" id="m-aliq-int" placeholder="auto" step="0.01" min="0" max="100">
+            <span class="hint">Padrão: alíquota modal da UF destino</span>
+          </div>
+          <div class="field">
+            <label>Alíq. Interestadual (%)</label>
+            <input type="number" id="m-aliq-inter" placeholder="auto" step="0.01" min="0" max="100">
+            <span class="hint">Padrão: 7% ou 12% conforme UFs</span>
+          </div>
+          <div class="field">
+            <label>FECP (%)</label>
+            <input type="number" id="m-aliq-fecp" placeholder="auto" step="0.01" min="0" max="100">
+            <span class="hint">Padrão: alíquota FECP da UF destino</span>
+          </div>
+        </div>
+      </details>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="gerarManual()">
+          <span>Gerar Guias</span>
+        </button>
+        <button class="btn btn-secondary" onclick="limparManual()">Limpar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Tab 3: JSON API ───────────────────────────────────────────────── -->
+  <div id="tab-api" class="tab-panel">
+    <div class="card">
+      <h2>Envio via API JSON</h2>
+      <p style="font-size:.85rem;color:var(--gray-600);margin-bottom:.75rem">
+        Endpoint: <code style="background:var(--gray-100);padding:.1rem .4rem;border-radius:4px">POST /api/gerar/json</code>
+        · Content-Type: application/json
+      </p>
+      <div class="field">
+        <label>Corpo da Requisição (JSON)</label>
+        <textarea class="json-editor" id="json-body" spellcheck="false"></textarea>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-secondary btn-sm" onclick="loadJsonExample()">Carregar Exemplo</button>
+        <button class="btn btn-secondary btn-sm" onclick="formatJson()">Formatar JSON</button>
+        <button class="btn btn-primary" onclick="gerarPorJSON()">Enviar e Gerar Guias</button>
+      </div>
+      <div style="margin-top:1rem;font-size:.8rem;color:var(--gray-600)">
+        <strong>Documentação da API:</strong>
+        <a href="/docs" target="_blank" style="color:var(--blue)">Swagger UI (/docs)</a> ·
+        <a href="/redoc" target="_blank" style="color:var(--blue)">ReDoc (/redoc)</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Tab 4: Empresas ──────────────────────────────────────────────────── -->
+  <div id="tab-empresas" class="tab-panel">
+    <div style="display:grid;grid-template-columns:320px 1fr;gap:1rem;align-items:start">
+
+      <!-- Left: list -->
+      <div>
+        <div class="card" style="margin-bottom:0">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+            <h2 style="margin:0">Empresas cadastradas</h2>
+            <button class="btn btn-primary btn-sm" onclick="novaEmpresa()">+ Nova</button>
+          </div>
+          <div id="empresa-lista">
+            <p style="font-size:.85rem;color:var(--gray-600);text-align:center;padding:1rem">Carregando...</p>
+          </div>
+        </div>
+        <div style="margin-top:.5rem;font-size:.75rem;color:var(--gray-600);padding:0 .25rem">
+          <span style="display:inline-flex;align-items:center;gap:.3rem"><span class="cert-dot green"></span>Certificado válido</span> &nbsp;
+          <span style="display:inline-flex;align-items:center;gap:.3rem"><span class="cert-dot yellow"></span>Expirando</span> &nbsp;
+          <span style="display:inline-flex;align-items:center;gap:.3rem"><span class="cert-dot red"></span>Expirado</span> &nbsp;
+          <span style="display:inline-flex;align-items:center;gap:.3rem"><span class="cert-dot gray"></span>Sem cert.</span>
+        </div>
+      </div>
+
+      <!-- Right: form -->
+      <div id="empresa-form-area">
+        <div class="card" style="background:var(--gray-50);border-style:dashed;text-align:center;padding:2rem;color:var(--gray-600)">
+          <p>Selecione uma empresa ao lado para editar<br>ou clique em <strong>+ Nova</strong> para cadastrar.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Results area ──────────────────────────────────────────────────── -->
+  <div id="results">
+    <div class="card" id="result-card">
+      <div class="result-header">
+        <div>
+          <div class="result-title" id="result-title"></div>
+          <div class="result-sub" id="result-sub"></div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="hideResults()">✕ Fechar</button>
+      </div>
+
+      <div class="calculo-grid" id="calculo-grid"></div>
+
+      <div id="guides-container"></div>
+
+      <div class="portal-bar" id="portal-bar" style="display:none">
+        <span>Portal para emissão manual:</span>
+        <a href="#" id="portal-link" target="_blank">Abrir Portal</a>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Toast notification -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────────
+const UFS = [
+  'AC','AL','AM','AP','BA','CE','DF','ES','GO','MA',
+  'MG','MS','MT','PA','PB','PE','PI','PR','RJ','RN',
+  'RO','RR','RS','SC','SE','SP','TO'
+];
+let selectedFile = null;
+let ufRates = {};
+
+// ── Init ───────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  // Populate UF selects
+  ['m-uf-emit', 'm-uf-dest'].forEach(id => {
+    const sel = document.getElementById(id);
+    UFS.forEach(uf => {
+      const opt = document.createElement('option');
+      opt.value = uf;
+      opt.textContent = uf;
+      sel.appendChild(opt);
+    });
+  });
+
+  // Load UF rates for display
+  fetch('/api/ufs').then(r => r.json()).then(d => { ufRates = d; }).catch(() => {});
+
+  // Drag-and-drop
+  const dz = document.getElementById('dropzone');
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault();
+    dz.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) setXMLFile(file);
+  });
+
+  // Tab keyboard accessibility
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(btn.dataset.tab).classList.add('active');
+    });
+  });
+
+  // Default dates
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('m-dh-emi').value = today;
+  // default vencimento = 3 days from now
+  const venc = new Date(); venc.setDate(venc.getDate() + 3);
+  document.getElementById('m-data-pag').value = venc.toISOString().split('T')[0];
+
+  loadJsonExample();
+});
+
+// ── Tab switch ─────────────────────────────────────────────────────────────────
+function switchTab(tabId) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === tabId));
+}
+
+// ── XML Tab ────────────────────────────────────────────────────────────────────
+function handleFileSelect(evt) {
+  setXMLFile(evt.target.files[0]);
+}
+function setXMLFile(file) {
+  if (!file) return;
+  selectedFile = file;
+  document.getElementById('xml-filename').textContent = file.name;
+  document.getElementById('btn-xml').disabled = false;
+}
+
+async function gerarPorXML() {
+  if (!selectedFile) return;
+  const btn = document.getElementById('btn-xml');
+  setLoading(btn, true);
+  try {
+    const fd = new FormData();
+    fd.append('file', selectedFile);
+    const res = await fetch('/api/gerar/xml', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erro desconhecido');
+    renderResults(data);
+  } catch (e) {
+    showToast('Erro: ' + e.message, 'error');
+  } finally {
+    setLoading(btn, false);
+  }
+}
+
+// ── Manual Form ────────────────────────────────────────────────────────────────
+async function onUFDestChange() {
+  const uf = document.getElementById('m-uf-dest').value;
+  if (!uf) return;
+  const info = document.getElementById('uf-dest-info');
+  if (ufRates[uf]) {
+    const r = ufRates[uf];
+    info.textContent = `${uf}: Alíq. interna ${r.aliq_interna}% · FECP ${r.fecp}%`;
+    info.classList.add('visible');
+  } else {
+    try {
+      const res = await fetch(`/api/uf/${uf}`);
+      const data = await res.json();
+      ufRates[uf] = data;
+      info.textContent = `${uf}: Alíq. interna ${data.aliq_interna}% · FECP ${data.fecp}%`;
+      info.classList.add('visible');
+    } catch {}
+  }
+}
+function onUFEmitChange() {}
+
+async function gerarManual() {
+  const required = ['m-cnpj-emit', 'm-nome-emit', 'm-uf-emit', 'm-nome-dest', 'm-uf-dest', 'm-bc-difal'];
+  let valid = true;
+  required.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el.value.trim()) { el.classList.add('required-missing'); valid = false; }
+    else el.classList.remove('required-missing');
+  });
+  if (!valid) { showToast('Preencha os campos obrigatórios (*)', 'error'); return; }
+
+  const body = buildManualPayload();
+  await callAPI('/api/gerar/manual', body);
+}
+
+function buildManualPayload() {
+  const g = id => document.getElementById(id)?.value?.trim();
+  const payload = {
+    cnpj_emit: onlyDigits(g('m-cnpj-emit')),
+    razao_social_emit: g('m-nome-emit'),
+    ie_emit: g('m-ie-emit') || null,
+    uf_emit: g('m-uf-emit'),
+    municipio_codigo_emit: g('m-mun-emit') || null,
+    cep_emit: onlyDigits(g('m-cep-emit')) || null,
+    logradouro_emit: g('m-logr-emit') || null,
+    numero_emit: g('m-num-emit') || null,
+    bairro_emit: g('m-bairro-emit') || null,
+    nome_dest: g('m-nome-dest'),
+    cnpj_dest: onlyDigits(g('m-cnpj-dest')) || null,
+    cpf_dest: onlyDigits(g('m-cpf-dest')) || null,
+    uf_dest: g('m-uf-dest'),
+    municipio_codigo_dest: g('m-mun-dest') || null,
+    cep_dest: onlyDigits(g('m-cep-dest')) || null,
+    logradouro_dest: g('m-logr-dest') || null,
+    numero_dest: g('m-num-dest') || null,
+    bairro_dest: g('m-bairro-dest') || null,
+    chave_nfe: g('m-chave') || null,
+    n_nf: g('m-nnf') || null,
+    serie: g('m-serie') || null,
+    dh_emi: g('m-dh-emi') || null,
+    v_bc_difal: parseFloat(g('m-bc-difal')) || 0,
+    produto_importado: document.getElementById('m-importado').value === 'true',
+    data_pagamento: g('m-data-pag') || null,
+  };
+  const aliqInt = g('m-aliq-int');
+  const aliqInter = g('m-aliq-inter');
+  const aliqFecp = g('m-aliq-fecp');
+  if (aliqInt) payload.aliq_interna_dest = parseFloat(aliqInt);
+  if (aliqInter) payload.aliq_interestadual = parseFloat(aliqInter);
+  if (aliqFecp) payload.aliq_fecp = parseFloat(aliqFecp);
+  return payload;
+}
+
+function limparManual() {
+  document.querySelectorAll('#tab-manual input, #tab-manual select').forEach(el => {
+    if (el.tagName === 'SELECT') el.selectedIndex = 0;
+    else if (el.type !== 'date') el.value = '';
+  });
+  document.getElementById('uf-dest-info').classList.remove('visible');
+}
+
+// ── JSON API Tab ───────────────────────────────────────────────────────────────
+function loadJsonExample() {
+  const example = {
+    cnpj_emit: "12345678000195",
+    razao_social_emit: "Empresa Vendedora Ltda",
+    uf_emit: "SP",
+    municipio_codigo_emit: "3550308",
+    cep_emit: "01310100",
+    logradouro_emit: "Av. Paulista",
+    numero_emit: "1000",
+    nome_dest: "Comprador Rio Ltda",
+    cnpj_dest: "98765432000100",
+    uf_dest: "RJ",
+    municipio_codigo_dest: "3304557",
+    chave_nfe: "35240612345678000195550010000001231000012345",
+    n_nf: "123",
+    serie: "1",
+    dh_emi: new Date().toISOString().slice(0, 10),
+    v_bc_difal: 1000.00,
+    data_pagamento: (() => {
+      const d = new Date(); d.setDate(d.getDate() + 3); return d.toISOString().slice(0, 10);
+    })()
+  };
+  document.getElementById('json-body').value = JSON.stringify(example, null, 2);
+}
+
+function formatJson() {
+  try {
+    const ta = document.getElementById('json-body');
+    ta.value = JSON.stringify(JSON.parse(ta.value), null, 2);
+  } catch { showToast('JSON inválido', 'error'); }
+}
+
+async function gerarPorJSON() {
+  let body;
+  try {
+    body = JSON.parse(document.getElementById('json-body').value);
+  } catch { showToast('JSON inválido', 'error'); return; }
+  await callAPI('/api/gerar/json', body);
+}
+
+// ── Shared API call ────────────────────────────────────────────────────────────
+async function callAPI(url, body) {
+  const btn = event?.target?.closest('.btn') || document.querySelector('.btn-primary');
+  setLoading(btn, true);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+    renderResults(data);
+  } catch (e) {
+    showToast('Erro: ' + e.message, 'error');
+  } finally {
+    setLoading(btn, false);
+  }
+}
+
+// ── Render results ─────────────────────────────────────────────────────────────
+function renderResults(data) {
+  document.getElementById('results').classList.add('visible');
+  document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  document.getElementById('result-title').textContent =
+    `Guias geradas para UF ${data.uf_dest}`;
+  document.getElementById('result-sub').textContent =
+    [data.emitente, '→', data.destinatario, data.n_nf ? `· NF ${data.n_nf}` : ''].filter(Boolean).join(' ');
+
+  // Calculation summary
+  const calc = data.calculo;
+  const cg = document.getElementById('calculo-grid');
+  cg.innerHTML = `
+    <div class="calculo-item"><label>Base de Cálculo</label><div class="value">${fmt(calc.v_bc)}</div></div>
+    <div class="calculo-item"><label>Alíq. Interna</label><div class="value">${calc.p_aliq_interna}%</div></div>
+    <div class="calculo-item"><label>Alíq. Interestadual</label><div class="value">${calc.p_aliq_inter}%</div></div>
+    <div class="calculo-item"><label>FECP</label><div class="value">${calc.p_fecp}%</div></div>
+    <div class="calculo-item"><label>DIFAL</label><div class="value money">${fmt(calc.v_difal)}</div></div>
+    ${calc.p_fecp > 0 ? `<div class="calculo-item"><label>FCP/FECP</label><div class="value money">${fmt(calc.v_fecp)}</div></div>` : ''}
+    <div class="calculo-item"><label>Total a Recolher</label><div class="value total">${fmt(calc.v_total)}</div></div>
+  `;
+
+  // Guide cards
+  const gc = document.getElementById('guides-container');
+  gc.innerHTML = '';
+  data.guias.forEach((g, i) => gc.appendChild(buildGuideCard(g, i)));
+
+  // Portal bar
+  if (data.portal_url) {
+    document.getElementById('portal-bar').style.display = 'flex';
+    const link = document.getElementById('portal-link');
+    link.href = data.portal_url;
+    link.textContent = data.uf_dest === 'SP' ? 'DARE-ICMS SP' : 'Portal GNRE';
+  }
+}
+
+function buildGuideCard(g, idx) {
+  const card = document.createElement('div');
+  card.className = 'guide-card';
+
+  const statusBadge = {
+    gerada: '<span class="guide-badge badge-gerada">✓ Gerada</span>',
+    pendente_webservice: '<span class="guide-badge badge-pendente">⏳ Pendente</span>',
+    erro: '<span class="guide-badge badge-erro">✗ Erro</span>',
+  }[g.status] || '';
+
+  const typeBadge = g.tipo === 'DARE-SP'
+    ? '<span class="guide-badge badge-dare">DARE-SP</span>'
+    : '<span class="guide-badge badge-gnre">GNRE</span>';
+
+  card.innerHTML = `
+    <div class="guide-header">
+      ${typeBadge}
+      <strong style="flex:1">${g.receita_descricao}</strong>
+      ${statusBadge}
+    </div>
+    <div class="guide-body">
+      <div class="guide-valor">${fmt(g.valor)}</div>
+      <div class="guide-meta">
+        ${g.receita_codigo ? `Cód. receita: <strong>${g.receita_codigo}</strong> &nbsp;·&nbsp;` : ''}
+        ${g.data_vencimento ? `Vencimento: <strong>${g.data_vencimento}</strong>` : ''}
+      </div>
+      ${g.linha_digitavel ? `<div class="barcode-line" title="Clique para copiar" onclick="copyText('${g.linha_digitavel}')">📋 ${g.linha_digitavel}</div>` : ''}
+      ${g.codigo_barras ? `<div class="barcode-line" style="font-size:.7rem">Cód. barras: ${g.codigo_barras}</div>` : ''}
+      ${g.mensagem ? `<div class="alert ${g.status === 'erro' ? 'alert-error' : g.status === 'pendente_webservice' ? 'alert-warning' : 'alert-info'}">${g.mensagem}</div>` : ''}
+      <div class="guide-actions">
+        ${g.gnre_xml ? `<button class="btn btn-secondary btn-sm" onclick="downloadXML(${idx})">⬇️ Baixar XML GNRE</button>` : ''}
+        ${g.pdf_base64 ? `<button class="btn btn-primary btn-sm" onclick="downloadPDF(${idx})">⬇️ Baixar PDF</button>` : ''}
+        ${g.linha_digitavel ? `<button class="btn btn-secondary btn-sm" onclick="copyText('${g.linha_digitavel}')">📋 Copiar Linha Digitável</button>` : ''}
+      </div>
+    </div>
+  `;
+
+  // Store data for downloads
+  card.dataset.gnreXml = g.gnre_xml || '';
+  card.dataset.pdfB64 = g.pdf_base64 || '';
+  card.dataset.uf = g.uf;
+  return card;
+}
+
+function hideResults() {
+  document.getElementById('results').classList.remove('visible');
+}
+
+// ── Downloads ──────────────────────────────────────────────────────────────────
+function downloadXML(idx) {
+  const cards = document.querySelectorAll('.guide-card');
+  const xml = cards[idx]?.dataset?.gnreXml;
+  if (!xml) return;
+  const uf = cards[idx]?.dataset?.uf || 'gnre';
+  downloadBlob(xml, `gnre_${uf}_${idx + 1}.xml`, 'text/xml');
+}
+
+function downloadPDF(idx) {
+  const cards = document.querySelectorAll('.guide-card');
+  const b64 = cards[idx]?.dataset?.pdfB64;
+  if (!b64) return;
+  const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  downloadBlob(bytes, `dare_sp_${idx + 1}.pdf`, 'application/pdf');
+}
+
+function downloadBlob(content, name, type) {
+  const blob = new Blob([content], { type });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ── Utilities ──────────────────────────────────────────────────────────────────
+function fmt(v) {
+  return 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function onlyDigits(s) {
+  return (s || '').replace(/\D/g, '');
+}
+
+function maskCNPJ(el) {
+  let v = el.value.replace(/\D/g, '').slice(0, 14);
+  if (v.length > 12) v = v.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+  else if (v.length > 8) v = v.replace(/^(\d{2})(\d{3})(\d{3})(\d{0,4})/, '$1.$2.$3/$4');
+  else if (v.length > 5) v = v.replace(/^(\d{2})(\d{3})(\d{0,3})/, '$1.$2.$3');
+  else if (v.length > 2) v = v.replace(/^(\d{2})(\d{0,3})/, '$1.$2');
+  el.value = v;
+}
+
+function maskCPF(el) {
+  let v = el.value.replace(/\D/g, '').slice(0, 11);
+  if (v.length > 9) v = v.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4');
+  else if (v.length > 6) v = v.replace(/^(\d{3})(\d{3})(\d{0,3})/, '$1.$2.$3');
+  else if (v.length > 3) v = v.replace(/^(\d{3})(\d{0,3})/, '$1.$2');
+  el.value = v;
+}
+
+function maskCEP(el) {
+  let v = el.value.replace(/\D/g, '').slice(0, 8);
+  if (v.length > 5) v = v.replace(/^(\d{5})(\d{1,3})$/, '$1-$2');
+  el.value = v;
+}
+
+function copyText(text) {
+  navigator.clipboard.writeText(text).then(() => showToast('Copiado!'));
+}
+
+function showToast(msg, type = 'info') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.background = type === 'error' ? '#991b1b' : '#111827';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function setLoading(btn, loading) {
+  if (!btn) return;
+  if (loading) {
+    btn.disabled = true;
+    btn.dataset.origText = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner"></span> Gerando...';
+  } else {
+    btn.disabled = false;
+    btn.innerHTML = btn.dataset.origText || 'Gerar Guias';
+  }
+}
+
+// ── Empresa management ─────────────────────────────────────────────────────────
+let empresaAtual = null; // currently selected empresa
+let certFile = null;     // PFX file staged for upload
+
+// Load and render list whenever the Empresas tab is activated
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.tab === 'tab-empresas') carregarEmpresas();
+    });
+  });
+});
+
+async function carregarEmpresas() {
+  const lista = document.getElementById('empresa-lista');
+  lista.innerHTML = '<p style="font-size:.85rem;color:var(--gray-600);text-align:center;padding:.5rem">Carregando...</p>';
+  try {
+    const res = await fetch('/api/empresas');
+    const empresas = await res.json();
+    if (!empresas.length) {
+      lista.innerHTML = '<p style="font-size:.85rem;color:var(--gray-600);text-align:center;padding:1rem">Nenhuma empresa cadastrada.</p>';
+      return;
+    }
+    lista.innerHTML = '';
+    empresas.forEach(emp => {
+      const card = document.createElement('div');
+      card.className = 'empresa-card' + (empresaAtual?.cnpj === emp.cnpj ? ' selected' : '');
+      card.onclick = () => selecionarEmpresa(emp);
+      const inicial = (emp.razao_social || '?')[0].toUpperCase();
+      const dotCor = emp.tem_certificado
+        ? (emp.cert_validade ? certCorClass(emp.cert_validade) : 'green')
+        : 'gray';
+      card.innerHTML = `
+        <div class="empresa-avatar">${inicial}</div>
+        <div class="empresa-info">
+          <div class="empresa-nome">${emp.razao_social}</div>
+          <div class="empresa-cnpj">${fmtCNPJ(emp.cnpj)} · ${emp.uf}</div>
+        </div>
+        <span class="cert-dot ${dotCor}" title="${emp.tem_certificado ? 'Certificado: ' + emp.cert_validade : 'Sem certificado'}"></span>
+      `;
+      lista.appendChild(card);
+    });
+  } catch(e) {
+    lista.innerHTML = '<p style="color:var(--red);font-size:.85rem;padding:.5rem">Erro ao carregar empresas.</p>';
+  }
+}
+
+function certCorClass(validade) {
+  try {
+    const [d, m, y] = validade.split('/');
+    const dt = new Date(`${y}-${m}-${d}`);
+    const dias = Math.floor((dt - new Date()) / 86400000);
+    if (dias < 0) return 'red';
+    if (dias <= 30) return 'yellow';
+    return 'green';
+  } catch { return 'green'; }
+}
+
+function fmtCNPJ(c) {
+  c = (c || '').replace(/\D/g, '');
+  return c.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+}
+
+function novaEmpresa() {
+  empresaAtual = null;
+  renderEmpresaForm(null);
+  document.querySelectorAll('.empresa-card').forEach(c => c.classList.remove('selected'));
+}
+
+function selecionarEmpresa(emp) {
+  empresaAtual = emp;
+  document.querySelectorAll('.empresa-card').forEach(c => c.classList.remove('selected'));
+  event?.currentTarget?.classList?.add('selected');
+  renderEmpresaForm(emp);
+}
+
+function renderEmpresaForm(emp) {
+  const area = document.getElementById('empresa-form-area');
+  const isEdit = !!emp;
+  area.innerHTML = `
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+        <h2 style="margin:0">${isEdit ? 'Editar Empresa' : 'Nova Empresa'}</h2>
+        ${isEdit ? `<button class="btn btn-secondary btn-sm" style="color:var(--red)" onclick="confirmarExcluir('${emp.cnpj}')">Excluir</button>` : ''}
+      </div>
+
+      <div class="section-divider">Dados da empresa</div>
+      <div class="grid">
+        <div class="field full">
+          <label>CNPJ *</label>
+          <input type="text" id="ef-cnpj" value="${emp?.cnpj ? fmtCNPJ(emp.cnpj) : ''}" ${isEdit ? 'readonly style="background:var(--gray-100)"' : ''} maxlength="18" oninput="maskCNPJ(this)" placeholder="00.000.000/0000-00">
+        </div>
+        <div class="field full">
+          <label>Razão Social *</label>
+          <input type="text" id="ef-nome" value="${emp?.razao_social || ''}" placeholder="Empresa Ltda">
+        </div>
+        <div class="field full">
+          <label>Nome Fantasia</label>
+          <input type="text" id="ef-fantasia" value="${emp?.nome_fantasia || ''}" placeholder="Opcional">
+        </div>
+        <div class="field">
+          <label>UF *</label>
+          <select id="ef-uf">${UFS.map(u => `<option value="${u}" ${emp?.uf===u?'selected':''}>${u}</option>`).join('')}</select>
+        </div>
+        <div class="field">
+          <label>Inscrição Estadual</label>
+          <input type="text" id="ef-ie" value="${emp?.ie || ''}" placeholder="000.000.000.000 ou ISENTO">
+        </div>
+        <div class="field">
+          <label>Cód. IBGE Município</label>
+          <input type="text" id="ef-mun-cod" value="${emp?.municipio_codigo || ''}" maxlength="7" placeholder="3550308">
+        </div>
+        <div class="field">
+          <label>Nome do Município</label>
+          <input type="text" id="ef-mun-nome" value="${emp?.municipio_nome || ''}" placeholder="São Paulo">
+        </div>
+        <div class="field">
+          <label>CEP</label>
+          <input type="text" id="ef-cep" value="${emp?.cep ? emp.cep.replace(/(\d{5})(\d{3})/,'$1-$2') : ''}" maxlength="9" oninput="maskCEP(this)" placeholder="00000-000">
+        </div>
+        <div class="field full">
+          <label>Logradouro</label>
+          <input type="text" id="ef-logr" value="${emp?.logradouro || ''}" placeholder="Av. Paulista">
+        </div>
+        <div class="field">
+          <label>Número</label>
+          <input type="text" id="ef-num" value="${emp?.numero || ''}" placeholder="1000">
+        </div>
+        <div class="field">
+          <label>Complemento</label>
+          <input type="text" id="ef-compl" value="${emp?.complemento || ''}" placeholder="Sala 1">
+        </div>
+        <div class="field">
+          <label>Bairro</label>
+          <input type="text" id="ef-bairro" value="${emp?.bairro || ''}" placeholder="Centro">
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btn-salvar-empresa" onclick="salvarEmpresa()">
+          ${isEdit ? 'Salvar alterações' : 'Cadastrar empresa'}
+        </button>
+      </div>
+
+      ${isEdit ? renderCertSection(emp) : ''}
+    </div>
+  `;
+
+  // Wire up certificate drop zone if editing
+  if (isEdit) setupCertDropZone();
+}
+
+function renderCertSection(emp) {
+  const hasCert = emp?.tem_certificado;
+  let badgeHtml = '';
+  if (hasCert && emp.cert_validade) {
+    const cor = certCorClass(emp.cert_validade);
+    const label = cor === 'green' ? 'Válido' : cor === 'yellow' ? 'Expirando' : 'Expirado';
+    badgeHtml = `<span class="cert-badge ${cor === 'green' ? 'valido' : cor === 'yellow' ? 'expirando' : 'expirado'}">● ${label} até ${emp.cert_validade}</span>`;
+  } else {
+    badgeHtml = `<span class="cert-badge sem">Sem certificado</span>`;
+  }
+
+  return `
+    <div class="section-divider" style="margin-top:1.5rem">Certificado Digital A1</div>
+
+    <div style="margin-bottom:.75rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem">
+      ${badgeHtml}
+      ${hasCert ? `
+        <div style="font-size:.8rem;color:var(--gray-600)">
+          CN: <strong>${emp.cert_cn || '—'}</strong> · Emitido por: ${emp.cert_emitente || '—'}
+        </div>
+        <button class="btn btn-secondary btn-sm" style="color:var(--red)" onclick="removerCertificado('${emp.cnpj}')">Remover certificado</button>
+      ` : ''}
+    </div>
+
+    <div class="cert-upload-zone" id="cert-drop" onclick="document.getElementById('cert-file-input').click()">
+      <input type="file" id="cert-file-input" accept=".pfx,.p12" onchange="handleCertFile(event)">
+      <div style="font-size:1.5rem;margin-bottom:.4rem">🔐</div>
+      <p style="font-size:.9rem;color:var(--gray-600)">${hasCert ? 'Substituir certificado' : 'Arraste ou clique para selecionar o arquivo PFX/P12'}</p>
+      <div id="cert-filename" style="font-size:.85rem;color:var(--blue);font-weight:600;margin-top:.3rem"></div>
+    </div>
+
+    <div class="grid-2 grid" id="cert-password-row" style="${'display:none'}">
+      <div class="field full">
+        <label>Senha do certificado</label>
+        <input type="password" id="cert-senha" placeholder="Senha do arquivo PFX">
+      </div>
+    </div>
+    <div class="btn-row" id="cert-upload-btn-row" style="display:none">
+      <button class="btn btn-primary" id="btn-upload-cert" onclick="uploadCertificado('${emp.cnpj}')">
+        Instalar certificado
+      </button>
+    </div>
+  `;
+}
+
+function setupCertDropZone() {
+  certFile = null;
+  const dz = document.getElementById('cert-drop');
+  if (!dz) return;
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault();
+    dz.classList.remove('drag-over');
+    const f = e.dataTransfer.files[0];
+    if (f) stageCertFile(f);
+  });
+}
+
+function handleCertFile(evt) {
+  stageCertFile(evt.target.files[0]);
+}
+
+function stageCertFile(file) {
+  certFile = file;
+  document.getElementById('cert-filename').textContent = file.name;
+  document.getElementById('cert-password-row').style.display = '';
+  document.getElementById('cert-upload-btn-row').style.display = '';
+}
+
+async function salvarEmpresa() {
+  const cnpj = onlyDigits(document.getElementById('ef-cnpj').value);
+  const nome = document.getElementById('ef-nome').value.trim();
+  if (!cnpj || cnpj.length !== 14) { showToast('CNPJ inválido', 'error'); return; }
+  if (!nome) { showToast('Razão social obrigatória', 'error'); return; }
+
+  const payload = {
+    cnpj,
+    razao_social: nome,
+    nome_fantasia: document.getElementById('ef-fantasia').value.trim() || null,
+    uf: document.getElementById('ef-uf').value,
+    ie: document.getElementById('ef-ie').value.trim() || null,
+    municipio_codigo: document.getElementById('ef-mun-cod').value.trim() || null,
+    municipio_nome: document.getElementById('ef-mun-nome').value.trim() || null,
+    cep: onlyDigits(document.getElementById('ef-cep').value) || null,
+    logradouro: document.getElementById('ef-logr').value.trim() || null,
+    numero: document.getElementById('ef-num').value.trim() || null,
+    complemento: document.getElementById('ef-compl').value.trim() || null,
+    bairro: document.getElementById('ef-bairro').value.trim() || null,
+  };
+
+  const btn = document.getElementById('btn-salvar-empresa');
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  try {
+    const res = await fetch('/api/empresas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erro');
+    showToast('Empresa salva com sucesso!');
+    empresaAtual = data;
+    await carregarEmpresas();
+    renderEmpresaForm(data);
+  } catch(e) {
+    showToast('Erro: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = orig;
+  }
+}
+
+async function uploadCertificado(cnpj) {
+  if (!certFile) { showToast('Selecione o arquivo PFX primeiro', 'error'); return; }
+  const senha = document.getElementById('cert-senha').value;
+
+  const fd = new FormData();
+  fd.append('arquivo', certFile);
+  fd.append('senha', senha);
+
+  const btn = document.getElementById('btn-upload-cert');
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Instalando...';
+  try {
+    const res = await fetch(`/api/empresas/${cnpj}/certificado`, { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erro ao instalar certificado');
+    showToast(`Certificado instalado! Válido por ${data.dias_restantes} dias.`);
+    certFile = null;
+    // Refresh empresa data
+    const empRes = await fetch(`/api/empresas/${cnpj}`);
+    empresaAtual = await empRes.json();
+    await carregarEmpresas();
+    renderEmpresaForm(empresaAtual);
+    setupCertDropZone();
+  } catch(e) {
+    showToast('Erro: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = orig;
+  }
+}
+
+async function removerCertificado(cnpj) {
+  if (!confirm('Remover o certificado da empresa?')) return;
+  try {
+    const res = await fetch(`/api/empresas/${cnpj}/certificado`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+    showToast('Certificado removido.');
+    const empRes = await fetch(`/api/empresas/${cnpj}`);
+    empresaAtual = await empRes.json();
+    await carregarEmpresas();
+    renderEmpresaForm(empresaAtual);
+  } catch(e) {
+    showToast('Erro: ' + e.message, 'error');
+  }
+}
+
+async function confirmarExcluir(cnpj) {
+  if (!confirm('Excluir esta empresa e seu certificado?')) return;
+  try {
+    const res = await fetch(`/api/empresas/${cnpj}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+    showToast('Empresa excluída.');
+    empresaAtual = null;
+    document.getElementById('empresa-form-area').innerHTML = `
+      <div class="card" style="background:var(--gray-50);border-style:dashed;text-align:center;padding:2rem;color:var(--gray-600)">
+        <p>Selecione uma empresa ao lado para editar<br>ou clique em <strong>+ Nova</strong> para cadastrar.</p>
+      </div>`;
+    carregarEmpresas();
+  } catch(e) {
+    showToast('Erro: ' + e.message, 'error');
+  }
+}
+</script>
+</body>
+</html>

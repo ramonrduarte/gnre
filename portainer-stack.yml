@@ -1,0 +1,65 @@
+# Stack para Portainer — conecta ao Postgres existente na rede "network_public"
+#
+# Pré-requisitos no servidor:
+#   1. Postgres rodando na rede Docker "network_public"
+#   2. Criar banco e usuário (execute no container do Postgres):
+#        CREATE USER gnre_user WITH PASSWORD 'senha_forte';
+#        CREATE DATABASE gnre_db OWNER gnre_user;
+#
+# Como usar no Portainer:
+#   Stacks > Add Stack > Web editor > cole este arquivo
+#   Adicione as variáveis abaixo em "Environment variables":
+#
+#   DATABASE_URL   = postgresql://gnre_user:senha_forte@<nome-container-postgres>:5432/gnre_db
+#   GNRE_AMBIENTE  = 2   (homologação) ou 1 (produção)
+#   PORT           = 8000
+
+version: "3.8"
+
+services:
+  gnre-app:
+    build:
+      context: https://github.com/ramonrduarte/gnre.git
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      # ── Banco de dados ─────────────────────────────────────────────────────
+      # host = nome do container Postgres na rede network_public
+      # Exemplo: postgresql://gnre_user:senha@postgres:5432/gnre_db
+      DATABASE_URL: ${DATABASE_URL}
+
+      # ── GNRE WebService ────────────────────────────────────────────────────
+      # 1 = Produção | 2 = Homologação (padrão)
+      GNRE_AMBIENTE: ${GNRE_AMBIENTE:-2}
+
+      # ── SP DARE-ICMS ───────────────────────────────────────────────────────
+      SP_DARE_CODIGO_DIFAL: ${SP_DARE_CODIGO_DIFAL:-064-2}
+      SP_PLAYWRIGHT_TIMEOUT: ${SP_PLAYWRIGHT_TIMEOUT:-30}
+
+      # ── Servidor ───────────────────────────────────────────────────────────
+      HOST: "0.0.0.0"
+      PORT: ${PORT:-8000}
+
+    volumes:
+      # Certificados A1 das empresas — persistidos entre deploys e atualizações
+      - gnre_certs:/app/data
+
+    networks:
+      - network_public
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/status')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  gnre_certs:
+    driver: local
+
+networks:
+  network_public:
+    external: true

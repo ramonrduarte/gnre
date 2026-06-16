@@ -1,0 +1,43 @@
+# Desenvolvimento local — sobe a aplicação + um Postgres de teste
+# Para produção via Portainer, use portainer-stack.yml
+#
+# Uso:
+#   docker compose up --build
+#   Acesse: http://localhost:8000
+
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://gnre:gnre@db:5432/gnre
+      GNRE_AMBIENTE: "2"
+      SP_DARE_CODIGO_DIFAL: "064-2"
+      SP_PLAYWRIGHT_TIMEOUT: "30"
+      HOST: "0.0.0.0"
+      PORT: "8000"
+    volumes:
+      - gnre_certs:/app/data/certs
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: gnre
+      POSTGRES_PASSWORD: gnre
+      POSTGRES_DB: gnre
+    volumes:
+      - gnre_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gnre"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  gnre_certs:
+  gnre_pg_data:
