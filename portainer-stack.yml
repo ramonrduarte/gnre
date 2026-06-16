@@ -21,7 +21,7 @@ services:
     build:
       context: https://github.com/ramonrduarte/gnre.git
     ports:
-      - "${PORT:-8000}:8000"
+      - "${PORT:-8000}:${PORT:-8000}"
     environment:
       # ── Banco de dados ─────────────────────────────────────────────────────
       # host = nome do container Postgres na rede network_public
@@ -50,7 +50,7 @@ services:
     restart: unless-stopped
 
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/status')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen(f'http://localhost:${PORT:-8000}/api/status')"]
       interval: 30s
       timeout: 10s
       retries: 3
