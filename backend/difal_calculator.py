@@ -9,7 +9,7 @@ from models import (
     FormularioManual, NFeDados, EmitenteModel, DestinatarioModel,
     EnderecoModel, DadosDIFAL, DIFALCalculo,
 )
-from uf_config import UF_ALIQ_INTERNA, UF_FECP, get_aliq_interestadual
+from uf_config import UF_ALIQ_INTERNA, get_aliq_interestadual
 
 
 _CENT = Decimal("0.01")
@@ -60,7 +60,10 @@ def calcular_difal_manual(form: FormularioManual) -> NFeDados:
     uf_emit = form.uf_emit.upper()
 
     aliq_interna = form.aliq_interna_dest if form.aliq_interna_dest is not None else UF_ALIQ_INTERNA.get(uf_dest, 18.0)
-    aliq_fecp = form.aliq_fecp if form.aliq_fecp is not None else UF_FECP.get(uf_dest, 0.0)
+    # FCP NÃO é calculado automaticamente — cliente define explicitamente via aliq_fecp.
+    # Motivo: a obrigatoriedade varia por NCM e muitos produtos são isentos.
+    # Para incluir FCP, passe aliq_fecp=2.0 (ou a alíquota aplicável ao produto).
+    aliq_fecp = form.aliq_fecp if form.aliq_fecp is not None else 0.0
     aliq_inter = (
         form.aliq_interestadual
         if form.aliq_interestadual is not None

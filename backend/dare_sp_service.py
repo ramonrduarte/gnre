@@ -1,190 +1,212 @@
 """
-SP DARE-ICMS automation via Playwright.
+SP DARE-ICMS via upload de XML-GNRE (portal fazenda.sp.gov.br/DareICMS/GnreLote).
 
-São Paulo does not use the national GNRE system for DIFAL.
-Instead it uses the DARE-ICMS portal: https://www4.fazenda.sp.gov.br/DareICMS
+São Paulo não usa o GNRE nacional, mas aceita o mesmo formato de XML GNRE
+no portal DARE-ICMS, convertendo automaticamente os códigos:
+  GNRE 100102 (10010-2) → DARE-SP 101-6  (DIFAL EC 87/2015)
+  GNRE 100110 (10011-0) → DARE-SP 102-8  (DIFAL por apuração)
 
-This module fills the form, submits it and returns the generated guide data
-(barcode / PDF). The selectors below are based on the SP DARE-ICMS form
-structure — update them if the portal changes its layout.
+Fluxo:
+  1. Gera XML no formato TLote_GNRE (mesmo do GNRE nacional com ufFavorecida=SP)
+  2. Playwright: navega até /DareICMS/GnreLote, faz upload do arquivo, clica Processar Lote
+  3. Extrai barcode/linha digitável/PDF do resultado
+
+Fallback: retorna XML para upload manual se Playwright falhar.
 """
 import os
 import base64
+import tempfile
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 
 from models import NFeDados, GuiaGerada
 
-_PORTAL_URL = "https://www4.fazenda.sp.gov.br/DareICMS"
-_TIMEOUT_MS = int(os.getenv("SP_PLAYWRIGHT_TIMEOUT", "30")) * 1000
-_DARE_CODIGO_DIFAL = os.getenv("SP_DARE_CODIGO_DIFAL", "064-2")
+_PORTAL_URL_GNRE_LOTE = "https://www4.fazenda.sp.gov.br/DareICMS/GnreLote"
+_TIMEOUT_MS = int(os.getenv("SP_PLAYWRIGHT_TIMEOUT", "60")) * 1000
+_GNRE_RECEITA_DIFAL_SP = "100102"  # 10010-2 → DARE-SP 101-6
+
+
+def _build_gnre_xml_sp(
+    dados: NFeDados,
+    valor_difal: Decimal,
+    data_pag: date,
+) -> str:
+    """
+    Reutiliza o builder do GNRE nacional com ufFavorecida=SP.
+    Formato plano (flat) idêntico ao aceito pelo portal SP GnreLote.
+    """
+    from gnre_service import _build_gnre_xml
+
+    dados_sp = dados.model_copy(update={"uf_dest": "SP"})
+    return _build_gnre_xml(dados_sp, _GNRE_RECEITA_DIFAL_SP, valor_difal, data_pag)
 
 
 async def gerar_dare_sp(
     dados: NFeDados,
     valor_difal: Decimal,
-    valor_fecp: Decimal,
+    _valor_fecp: Decimal,  # SP não tem FCP separado no DIFAL EC 87/2015
     data_pag: date | None = None,
 ) -> list[GuiaGerada]:
     """
-    Fill the SP DARE-ICMS portal form and return the generated guide(s).
-    Requires `playwright install chromium` to have been run once.
-    Returns one guide for DIFAL (SP has no separate FCP — fecp=0).
+    Gera DARE-SP via upload de XML no portal GnreLote.
+    Playwright necessário: playwright install chromium
     """
     from datetime import date as _date
     data_pag = data_pag or _date.today()
 
-    emit = dados.emitente
-    doc_id = emit.cnpj  # always CNPJ for B2B; CPF for PF
-    valor_total = valor_difal  # SP FECP = 0
-
-    # Reference info for the form
-    referencia = dados.chave_nfe or dados.n_nf or "S/N"
-    periodo = ""
-    if dados.dh_emi:
-        try:
-            from datetime import datetime
-            dt = datetime.fromisoformat(dados.dh_emi[:19])
-            periodo = dt.strftime("%m/%Y")
-        except Exception:
-            periodo = date.today().strftime("%m/%Y")
+    gnre_xml = _build_gnre_xml_sp(dados, valor_difal, data_pag)
 
     try:
         from playwright.async_api import async_playwright
 
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            ctx = await browser.new_context()
-            page = await ctx.new_page()
-            page.set_default_timeout(_TIMEOUT_MS)
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".xml", encoding="utf-8", delete=False
+        ) as tmp:
+            tmp.write(gnre_xml)
+            xml_path = tmp.name
 
-            await page.goto(_PORTAL_URL)
+        modal_msg = ""
+        try:
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(headless=True)
+                ctx = await browser.new_context()
+                page = await ctx.new_page()
+                page.set_default_timeout(_TIMEOUT_MS)
 
-            # ── Fill DARE form ────────────────────────────────────────────────
-            # The SP DARE-ICMS form fields — selectors may need adjustment
-            # if the portal updates its HTML structure.
+                await page.goto(_PORTAL_URL_GNRE_LOTE)
 
-            # CNPJ/CPF field
-            cnpj_input = page.locator("input[name*='cnpj'], input[id*='cnpj'], input[name*='CNPJ']").first
-            await cnpj_input.fill(_only_digits(doc_id))
+                # Upload do arquivo XML
+                file_input = page.locator("input[type='file']")
+                await file_input.set_input_files(xml_path)
 
-            # IE (Inscrição Estadual)
-            ie_val = emit.ie or "ISENTO"
-            ie_input = page.locator("input[name*='ie'], input[id*='ie']").first
-            if await ie_input.count():
-                await ie_input.fill(ie_val)
+                # Aguarda o modal de feedback aparecer (SP valida antes de habilitar botão)
+                try:
+                    await page.wait_for_selector(
+                        "#merro.show, #msucesso.show, #btnProcessarLote:not([disabled])",
+                        timeout=15000,
+                    )
+                except Exception:
+                    pass  # continua mesmo se timeout
 
-            # Código de receita
-            cod_input = page.locator("input[name*='codigo'], input[id*='codigo'], input[name*='receita']").first
-            await cod_input.fill(_DARE_CODIGO_DIFAL.replace("-", ""))
+                # Lê e fecha modal de erro (#merro), se aberto
+                error_modal = page.locator("#merro.show, .modal.show[id*='erro']")
+                if await error_modal.count():
+                    modal_msg = (await error_modal.text_content() or "").strip()
+                    # Fecha o modal
+                    close_btn = error_modal.locator("button.close, .btn-close, button:has-text('Fechar'), button:has-text('×'), button:has-text('OK')")
+                    if await close_btn.count():
+                        await close_btn.first.click()
+                    await page.wait_for_timeout(500)
 
-            # Data de vencimento
-            venc_input = page.locator("input[name*='vencimento'], input[id*='vencimento'], input[name*='dataVenc']").first
-            await venc_input.fill(data_pag.strftime("%d/%m/%Y"))
+                # Verifica se o botão foi habilitado após fechar o modal
+                btn = page.locator("#btnProcessarLote, button:has-text('Processar'), input[value*='Processar']").first
+                btn_disabled = await btn.get_attribute("disabled")
+                if btn_disabled is not None:
+                    # Botão ainda desabilitado — não prosseguir
+                    await browser.close()
+                    return [_dare_fallback(valor_difal, data_pag, gnre_xml,
+                        f"Portal SP: upload aceito mas processamento bloqueado. {modal_msg}".strip())]
 
-            # Período de referência
-            periodo_input = page.locator("input[name*='periodo'], input[id*='periodo'], input[name*='periodo']").first
-            if await periodo_input.count() and periodo:
-                await periodo_input.fill(periodo)
+                await btn.click()
+                await page.wait_for_load_state("networkidle", timeout=_TIMEOUT_MS)
 
-            # Número do documento (NF-e key or NF number)
-            nro_input = page.locator("input[name*='documento'], input[id*='documento'], input[name*='nroDoc']").first
-            if await nro_input.count():
-                await nro_input.fill(referencia[:44])
+                barcode = ""
+                linha = ""
+                pdf_b64 = ""
 
-            # Valor principal
-            valor_input = page.locator("input[name*='valor'], input[id*='valor'], input[name*='valorPrincipal']").first
-            await valor_input.fill(f"{valor_total:.2f}".replace(".", ","))
+                # Captura código de barras / linha digitável
+                for sel in ["[id*='codigoBarra']", "[id*='barcode']", "[class*='barcode']", "[id*='codigo']"]:
+                    el = page.locator(sel).first
+                    if await el.count():
+                        txt = (await el.text_content() or "").strip()
+                        if txt:
+                            barcode = txt
+                            break
 
-            # Submit
-            submit_btn = page.locator("button[type='submit'], input[type='submit'], button:has-text('Gerar'), button:has-text('Emitir')").first
-            await submit_btn.click()
+                for sel in ["[id*='linhaDigitavel']", "[id*='linha']"]:
+                    el = page.locator(sel).first
+                    if await el.count():
+                        txt = (await el.text_content() or "").strip()
+                        if txt:
+                            linha = txt
+                            break
 
-            # ── Capture result ────────────────────────────────────────────────
-            await page.wait_for_load_state("networkidle", timeout=_TIMEOUT_MS)
+                # Tenta baixar PDF
+                pdf_link = page.locator(
+                    "a[href*='.pdf'], a:has-text('PDF'), a:has-text('Imprimir'), "
+                    "button:has-text('Imprimir'), a:has-text('Download')"
+                ).first
+                if await pdf_link.count():
+                    try:
+                        async with page.expect_download() as dl_info:
+                            await pdf_link.click()
+                        dl = await dl_info.value
+                        dl_path = await dl.path()
+                        if dl_path:
+                            pdf_bytes = Path(dl_path).read_bytes()
+                            if pdf_bytes:
+                                pdf_b64 = base64.b64encode(pdf_bytes).decode()
+                    except Exception:
+                        pass
 
-            # Try to get barcode or linha digitável from result page
-            barcode = ""
-            linha = ""
-            pdf_b64 = ""
+                # Fallback: screenshot se não encontrou barcode
+                if not pdf_b64 and not barcode:
+                    screenshot = await page.screenshot(type="png", full_page=True)
+                    pdf_b64 = base64.b64encode(screenshot).decode()
 
-            barcode_el = page.locator("[id*='codigoBarra'], [id*='barcode'], [class*='barcode']").first
-            if await barcode_el.count():
-                barcode = (await barcode_el.text_content() or "").strip()
+                await browser.close()
 
-            linha_el = page.locator("[id*='linhaDigitavel'], [id*='linha']").first
-            if await linha_el.count():
-                linha = (await linha_el.text_content() or "").strip()
-
-            # Try to get PDF link and download
-            pdf_link = page.locator("a[href*='.pdf'], a:has-text('PDF'), a:has-text('Imprimir')").first
-            if await pdf_link.count():
-                async with page.expect_download() as dl_info:
-                    await pdf_link.click()
-                download = await dl_info.value
-                pdf_bytes = await (await download.path()).read_bytes() if download else b""
-                if pdf_bytes:
-                    pdf_b64 = base64.b64encode(pdf_bytes).decode()
-
-            # Fallback: take a screenshot of the result as PDF
-            if not pdf_b64 and not barcode:
-                screenshot = await page.screenshot(type="png", full_page=True)
-                pdf_b64 = base64.b64encode(screenshot).decode()
-
-            await browser.close()
+        finally:
+            Path(xml_path).unlink(missing_ok=True)
 
         status = "gerada" if (barcode or linha or pdf_b64) else "pendente_webservice"
-        mensagem = None if status == "gerada" else (
-            "DARE gerado mas não foi possível extrair o código de barras automaticamente. "
-            "Verifique a tela do portal."
+        mensagem = (
+            None if status == "gerada"
+            else (
+                f"DARE gerado mas não foi possível extrair o código de barras. "
+                f"Acesse {_PORTAL_URL_GNRE_LOTE} e faça upload do XML manualmente."
+            )
         )
 
         return [GuiaGerada(
             tipo="DARE-SP",
             uf="SP",
-            receita_codigo=_DARE_CODIGO_DIFAL,
-            receita_descricao="ICMS Diferencial de Alíquota – SP",
-            valor=valor_total,
+            receita_codigo=_GNRE_RECEITA_DIFAL_SP,
+            receita_descricao="ICMS Diferencial de Alíquota – SP (DARE-ICMS)",
+            valor=valor_difal,
             data_vencimento=data_pag.strftime("%d/%m/%Y"),
             codigo_barras=barcode or None,
             linha_digitavel=linha or None,
             pdf_base64=pdf_b64 or None,
+            gnre_xml=gnre_xml,
             status=status,
             mensagem=mensagem,
         )]
 
     except ImportError:
-        return [_dare_sem_playwright(dados, valor_total, data_pag)]
+        return [_dare_fallback(valor_difal, data_pag, gnre_xml,
+            f"Playwright não instalado. Execute: playwright install chromium\n"
+            f"Ou acesse {_PORTAL_URL_GNRE_LOTE} e faça upload do XML.")]
     except Exception as exc:
-        return [GuiaGerada(
-            tipo="DARE-SP",
-            uf="SP",
-            receita_codigo=_DARE_CODIGO_DIFAL,
-            receita_descricao="ICMS Diferencial de Alíquota – SP",
-            valor=valor_total,
-            data_vencimento=data_pag.strftime("%d/%m/%Y"),
-            status="erro",
-            mensagem=f"Falha na automação do portal SP: {exc}. Acesse {_PORTAL_URL} manualmente.",
-        )]
+        return [_dare_fallback(valor_difal, data_pag, gnre_xml,
+            f"Falha na automação: {exc}\nAcesse {_PORTAL_URL_GNRE_LOTE} manualmente.")]
 
 
-def _dare_sem_playwright(dados: NFeDados, valor: Decimal, data_pag: date) -> GuiaGerada:
-    """Fallback when Playwright is not installed."""
+def _dare_fallback(
+    valor: Decimal,
+    data_pag: date,
+    gnre_xml: str,
+    mensagem: str,
+) -> GuiaGerada:
     return GuiaGerada(
         tipo="DARE-SP",
         uf="SP",
-        receita_codigo=_DARE_CODIGO_DIFAL,
-        receita_descricao="ICMS Diferencial de Alíquota – SP",
+        receita_codigo=_GNRE_RECEITA_DIFAL_SP,
+        receita_descricao="ICMS Diferencial de Alíquota – SP (DARE-ICMS)",
         valor=valor,
         data_vencimento=data_pag.strftime("%d/%m/%Y"),
+        gnre_xml=gnre_xml,
         status="pendente_webservice",
-        mensagem=(
-            f"Playwright não instalado. Execute: playwright install chromium\n"
-            f"Ou acesse manualmente: {_PORTAL_URL}\n"
-            f"Código receita: {_DARE_CODIGO_DIFAL} | Valor: R$ {valor:.2f}"
-        ),
+        mensagem=mensagem,
     )
-
-
-def _only_digits(s: str) -> str:
-    return "".join(c for c in s if c.isdigit())

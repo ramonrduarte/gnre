@@ -1,11 +1,12 @@
 """
 Routes NF-e data to the correct guide generation service:
-  - SP  → DARE-ICMS (fazenda.sp.gov.br)
-  - others → national GNRE WebService (gnre.pe.gov.br)
+  - SP  → DARE-ICMS via portal fazenda.sp.gov.br/DareICMS/GnreLote (Playwright)
+  - ES  → DUA-e via WebService app.sefaz.es.gov.br/WsDua/DuaService.asmx
+  - others → national GNRE WebService gnre.pe.gov.br
 
 When a CNPJ emit is registered in the DB:
   - Emitente address is auto-filled from the empresa record
-  - The empresa's A1 certificate is used for GNRE WebService authentication
+  - The empresa's A1 certificate is used for all WebService calls
 """
 from datetime import date
 from decimal import Decimal
@@ -13,15 +14,17 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from models import NFeDados, ResultadoGuias, GuiaGerada
-from uf_config import UF_GNRE_CODES, uf_usa_gnre
+from uf_config import UF_GNRE_CODES, UF_DIFAL_CONFIG, uf_usa_gnre
 from gnre_service import gerar_gnre
 from dare_sp_service import gerar_dare_sp
+from dare_es_service import gerar_dua_es
 from difal_calculator import build_calculo_from_nfe
 from cert_manager import get_cert_paths
 
 
 _PORTAL_GNRE = "https://www.gnre.pe.gov.br:444/gnre/portal/GNRE_Principal.jsp"
-_PORTAL_SP = "https://www4.fazenda.sp.gov.br/DareICMS"
+_PORTAL_SP   = "https://www4.fazenda.sp.gov.br/DareICMS"
+_PORTAL_ES   = "https://s1-internet.sefaz.es.gov.br/site-internet-dua/emissao/dua/icms"
 
 
 def _validate_difal(dados: NFeDados) -> str | None:
@@ -92,9 +95,14 @@ async def gerar_guias_completo(dados: NFeDados, db: Session | None = None) -> Re
     guias: list[GuiaGerada] = []
 
     if uf_usa_gnre(uf_dest):
-        codes = UF_GNRE_CODES.get(uf_dest, {"difal": "100122", "fecp": None})
+        codes = UF_GNRE_CODES.get(uf_dest, {"difal": "100102", "fecp": None})
+        uf_cfg = UF_DIFAL_CONFIG.get(uf_dest) or {}
+        fecp_mesmo_guia: bool = uf_cfg.get("fecp_mesmo_guia", False)
 
         if difal_val > Decimal("0") and codes["difal"]:
+            # Para UFs com fecp_mesmo_guia (RJ, RO, RS, SE), o FCP vai dentro do
+            # próprio guia DIFAL como valor tipo="12" — sem guia separada.
+            fecp_para_difal = fecp_val if fecp_mesmo_guia else None
             guia_difal = gerar_gnre(
                 dados,
                 receita=codes["difal"],
@@ -102,10 +110,12 @@ async def gerar_guias_completo(dados: NFeDados, db: Session | None = None) -> Re
                 valor=difal_val,
                 data_pag=data_pag,
                 cert_paths=cert_paths,
+                fecp_valor=fecp_para_difal,
             )
             guias.append(guia_difal)
 
-        if fecp_val > Decimal("0") and codes.get("fecp"):
+        # Guia FCP separada apenas para estados sem fecp_mesmo_guia
+        if fecp_val > Decimal("0") and codes.get("fecp") and not fecp_mesmo_guia:
             guia_fecp = gerar_gnre(
                 dados,
                 receita=codes["fecp"],
@@ -117,7 +127,21 @@ async def gerar_guias_completo(dados: NFeDados, db: Session | None = None) -> Re
             guias.append(guia_fecp)
 
         portal_url = _PORTAL_GNRE
+    elif uf_dest == "ES":
+        # ES usa DUA-e via WebService próprio (não GNRE nacional)
+        if difal_val > Decimal("0"):
+            guia_es = gerar_dua_es(
+                dados,
+                receita="3867",
+                descricao="ICMS Diferencial de Alíquota EC 87/2015 – ES (DUA-e)",
+                valor=difal_val,
+                data_pag=data_pag,
+                cert_paths=cert_paths,
+            )
+            guias.append(guia_es)
+        portal_url = _PORTAL_ES
     else:
+        # SP → DARE-ICMS via portal fazenda.sp.gov.br
         guias = await gerar_dare_sp(dados, difal_val, fecp_val, data_pag)
         portal_url = _PORTAL_SP
 

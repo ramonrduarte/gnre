@@ -104,7 +104,14 @@ class FormularioManual(BaseModel):
     # Override calculated rates (optional — system uses state defaults if omitted)
     aliq_interna_dest: Optional[float] = Field(None, description="Alíquota interna UF destino (%)")
     aliq_interestadual: Optional[float] = Field(None, description="Alíquota interestadual (%)")
-    aliq_fecp: Optional[float] = Field(None, description="Alíquota FECP (%)")
+    aliq_fecp: Optional[float] = Field(
+        None,
+        description=(
+            "Alíquota FCP (%). Padrão: 0 (sem FCP). "
+            "Informe explicitamente (ex: 2.0) quando o produto tiver FCP aplicável. "
+            "A obrigatoriedade varia por NCM — consulte a legislação da UF destino."
+        ),
+    )
     produto_importado: bool = Field(False, description="Produto importado (alíq. inter. 4%)")
 
     # Payment
