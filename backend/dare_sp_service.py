@@ -66,106 +66,91 @@ async def gerar_dare_sp(
             tmp.write(gnre_xml)
             xml_path = tmp.name
 
-        modal_msg = ""
+        zip_bytes = b""
         try:
             async with async_playwright() as p:
                 browser = await p.chromium.launch(headless=True)
-                ctx = await browser.new_context()
-                page = await ctx.new_page()
+                page = await browser.new_page()
                 page.set_default_timeout(_TIMEOUT_MS)
 
                 await page.goto(_PORTAL_URL_GNRE_LOTE)
 
-                # Upload do arquivo XML
-                file_input = page.locator("input[type='file']")
-                await file_input.set_input_files(xml_path)
+                # 1) Upload do XML
+                await page.locator("input[type='file']").set_input_files(xml_path)
+                await page.wait_for_timeout(2000)
 
-                # Aguarda o modal de feedback aparecer (SP valida antes de habilitar botão)
-                try:
-                    await page.wait_for_selector(
-                        "#merro.show, #msucesso.show, #btnProcessarLote:not([disabled])",
-                        timeout=15000,
-                    )
-                except Exception:
-                    pass  # continua mesmo se timeout
-
-                # Lê e fecha modal de erro (#merro), se aberto
-                error_modal = page.locator("#merro.show, .modal.show[id*='erro']")
-                if await error_modal.count():
-                    modal_msg = (await error_modal.text_content() or "").strip()
-                    # Fecha o modal
-                    close_btn = error_modal.locator("button.close, .btn-close, button:has-text('Fechar'), button:has-text('×'), button:has-text('OK')")
-                    if await close_btn.count():
-                        await close_btn.first.click()
-                    await page.wait_for_timeout(500)
-
-                # Verifica se o botão foi habilitado após fechar o modal
-                btn = page.locator("#btnProcessarLote, button:has-text('Processar'), input[value*='Processar']").first
-                btn_disabled = await btn.get_attribute("disabled")
-                if btn_disabled is not None:
-                    # Botão ainda desabilitado — não prosseguir
+                # 2) Clica "Processar Lote"
+                btn_proc = page.locator(
+                    "#btnProcessarLote, button:has-text('Processar Lote')"
+                ).first
+                if await btn_proc.get_attribute("disabled") is not None:
                     await browser.close()
                     return [_dare_fallback(valor_difal, data_pag, gnre_xml,
-                        f"Portal SP: upload aceito mas processamento bloqueado. {modal_msg}".strip())]
+                        "Portal SP: botão 'Processar Lote' desabilitado após upload.")]
 
-                await btn.click()
-                await page.wait_for_load_state("networkidle", timeout=_TIMEOUT_MS)
+                await btn_proc.click()
 
-                barcode = ""
-                linha = ""
-                pdf_b64 = ""
+                # Aguarda até 20s o texto de sucesso ou erro aparecer
+                try:
+                    await page.wait_for_selector(
+                        "text=processado com sucesso, text=processado com erros",
+                        timeout=20000,
+                    )
+                except Exception:
+                    pass
 
-                # Captura código de barras / linha digitável
-                for sel in ["[id*='codigoBarra']", "[id*='barcode']", "[class*='barcode']", "[id*='codigo']"]:
-                    el = page.locator(sel).first
-                    if await el.count():
-                        txt = (await el.text_content() or "").strip()
-                        if txt:
-                            barcode = txt
+                page_text = await page.inner_text("body")
+
+                if "processado com erros" in page_text.lower():
+                    # Lê a linha de erro da tabela de resultados
+                    erro_detalhe = ""
+                    rows = page.locator("table tr")
+                    for i in range(await rows.count()):
+                        row_txt = (await rows.nth(i).inner_text() or "").strip()
+                        if row_txt and row_txt != "Guia\tCampos com erro\tSituação":
+                            erro_detalhe = row_txt
                             break
+                    await browser.close()
+                    return [_dare_fallback(valor_difal, data_pag, gnre_xml,
+                        f"Portal SP processou com erro: {erro_detalhe}")]
 
-                for sel in ["[id*='linhaDigitavel']", "[id*='linha']"]:
-                    el = page.locator(sel).first
-                    if await el.count():
-                        txt = (await el.text_content() or "").strip()
-                        if txt:
-                            linha = txt
-                            break
+                if "processado com sucesso" not in page_text.lower():
+                    await browser.close()
+                    return [_dare_fallback(valor_difal, data_pag, gnre_xml,
+                        f"Portal SP: resposta inesperada — {page_text[:200]}")]
 
-                # Tenta baixar PDF
-                pdf_link = page.locator(
-                    "a[href*='.pdf'], a:has-text('PDF'), a:has-text('Imprimir'), "
-                    "button:has-text('Imprimir'), a:has-text('Download')"
+                # 3) Clica "Gerar DAREs" e baixa o ZIP
+                gerar_btn = page.locator(
+                    "button:has-text('Gerar DAREs'), #btnGerarDares"
                 ).first
-                if await pdf_link.count():
-                    try:
-                        async with page.expect_download() as dl_info:
-                            await pdf_link.click()
-                        dl = await dl_info.value
-                        dl_path = await dl.path()
-                        if dl_path:
-                            pdf_bytes = Path(dl_path).read_bytes()
-                            if pdf_bytes:
-                                pdf_b64 = base64.b64encode(pdf_bytes).decode()
-                    except Exception:
-                        pass
+                if not await gerar_btn.count():
+                    await browser.close()
+                    return [_dare_fallback(valor_difal, data_pag, gnre_xml,
+                        "Portal SP: botão 'Gerar DAREs' não encontrado.")]
 
-                # Fallback: screenshot se não encontrou barcode
-                if not pdf_b64 and not barcode:
-                    screenshot = await page.screenshot(type="png", full_page=True)
-                    pdf_b64 = base64.b64encode(screenshot).decode()
+                async with page.expect_download(timeout=30000) as dl_info:
+                    await gerar_btn.click()
+
+                dl = await dl_info.value
+                dl_path = await dl.path()
+                if dl_path:
+                    zip_bytes = Path(dl_path).read_bytes()
 
                 await browser.close()
 
         finally:
             Path(xml_path).unlink(missing_ok=True)
 
-        status = "gerada" if (barcode or linha or pdf_b64) else "pendente_webservice"
+        # Extrai o PDF do ZIP e o código de barras do texto do PDF
+        barcode, linha, pdf_b64, numero_dare = _extrair_dare_do_zip(zip_bytes)
+
+        status = "gerada" if (pdf_b64 or barcode) else "pendente_webservice"
         mensagem = (
-            None if status == "gerada"
+            f"DARE-SP nº {numero_dare} gerado. Valor: R$ {valor_difal:.2f}"
+            if status == "gerada" and numero_dare
             else (
-                f"DARE gerado mas não foi possível extrair o código de barras. "
-                f"Acesse {_PORTAL_URL_GNRE_LOTE} e faça upload do XML manualmente."
+                None if status == "gerada"
+                else f"ZIP não obtido. Acesse {_PORTAL_URL_GNRE_LOTE} e faça upload do XML."
             )
         )
 
@@ -191,6 +176,63 @@ async def gerar_dare_sp(
     except Exception as exc:
         return [_dare_fallback(valor_difal, data_pag, gnre_xml,
             f"Falha na automação: {exc}\nAcesse {_PORTAL_URL_GNRE_LOTE} manualmente.")]
+
+
+def _extrair_dare_do_zip(zip_bytes: bytes) -> tuple[str, str, str, str]:
+    """
+    Extrai o PDF do DARE-SP do arquivo ZIP retornado pelo portal.
+    Retorna (barcode, linha_digitavel, pdf_base64, numero_dare).
+
+    O PDF do SP contém a linha digitável no formato:
+        85860000000-4 50000185112-0 60590131312-1 40520260630-5
+    e o número do DARE no campo "09 - Número do DARE".
+    """
+    import zipfile, re, io
+
+    if not zip_bytes:
+        return "", "", "", ""
+
+    try:
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as z:
+            # Pega o primeiro PDF do ZIP
+            pdfs = [n for n in z.namelist() if n.lower().endswith(".pdf")]
+            if not pdfs:
+                return "", "", "", ""
+            pdf_bytes = z.read(pdfs[0])
+    except Exception:
+        return "", "", "", ""
+
+    pdf_b64 = base64.b64encode(pdf_bytes).decode()
+    barcode = ""
+    linha = ""
+    numero_dare = ""
+
+    try:
+        import pdfplumber, io as _io
+        with pdfplumber.open(_io.BytesIO(pdf_bytes)) as pdf:
+            full_text = "\n".join(
+                page.extract_text() or "" for page in pdf.pages
+            )
+
+            # Linha digitável: 4 grupos separados por espaço, no formato NNN...N-D
+            # Exemplo: 85860000000-4 50000185112-0 60590131312-1 40520260630-5
+            m = re.search(
+                r"(\d{8,14}-\d)\s+(\d{8,14}-\d)\s+(\d{8,14}-\d)\s+(\d{8,14}-\d)",
+                full_text,
+            )
+            if m:
+                linha = " ".join(m.groups())
+                barcode = re.sub(r"[-\s]", "", linha)
+
+            # Número do DARE
+            m2 = re.search(r"09\s*-\s*N[úu]mero do DARE\s*\n?\s*(\d{10,20})", full_text)
+            if m2:
+                numero_dare = m2.group(1)
+
+    except Exception:
+        pass  # pdfplumber não instalado ou PDF ilegível — retorna só o b64
+
+    return barcode, linha, pdf_b64, numero_dare
 
 
 def _dare_fallback(

@@ -380,11 +380,12 @@ UF_DIFAL_CONFIG: dict[str, dict | None] = {
     # SP usa DARE-ICMS via portal fazenda.sp.gov.br/DareICMS/GnreLote
     # O portal aceita XML no mesmo layout GNRE e converte para DARE-SP automaticamente.
     # GNRE 100102 (10010-2) → DARE-SP 101-6
+    # SP exige referencia (período mês/ano) — confirmado via teste em 17/06/2026
     "SP": {
         "tipo_doc": "24",      # CHAVE DO DFe
         "doc_valor": "chave",
         "exige_dest":    False,
-        "exige_periodo": False,
+        "exige_periodo": True,   # SP requer referencia/mes/ano
         "fecp_mesmo_guia": False,
         "convenio": False,
         "campos_extras": [],
