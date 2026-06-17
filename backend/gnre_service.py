@@ -146,9 +146,9 @@ def _build_gnre_xml(
     emit_el = _el(guide, "contribuinteEmitente")
     ident = _el(emit_el, "identificacao")
     _el(ident, "CNPJ", _digits(emit.cnpj))
-    ie = (emit.ie or "").strip()
-    if ie and ie.upper() != "ISENTO":
-        _el(ident, "IE", ie)
+    # IE NÃO é enviada: a IE do emitente é do estado de origem (RS, SP, etc.),
+    # não da UF favorecida. Enviar causa erro 700 "INSCRICAO ESTADUAL NAO CADASTRADA".
+    # Para DIFAL, o emitente usa apenas CNPJ na identificação.
     _el(emit_el, "razaoSocial", emit.razao_social[:60])
     addr_parts = [p for p in [end.logradouro, end.numero, end.bairro] if p]
     _el(emit_el, "endereco", " ".join(addr_parts)[:60] if addr_parts else "")
