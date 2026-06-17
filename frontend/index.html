@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Gerador de Guias DIFAL / GNRE</title>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -895,6 +896,7 @@ async function callAPI(url, body) {
 
 // ── Render results ─────────────────────────────────────────────────────────────
 function renderResults(data) {
+  window._lastResult = data;
   document.getElementById('results').classList.add('visible');
   document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
 
@@ -962,6 +964,7 @@ function buildGuideCard(g, idx) {
       <div class="guide-actions">
         ${g.gnre_xml ? `<button class="btn btn-secondary btn-sm" onclick="downloadXML(${idx})">⬇️ Baixar XML GNRE</button>` : ''}
         ${g.pdf_base64 ? `<button class="btn btn-primary btn-sm" onclick="downloadPDF(${idx})">⬇️ Baixar PDF</button>` : ''}
+        ${g.codigo_barras && g.tipo === 'GNRE' ? `<button class="btn btn-primary btn-sm" onclick="printGNRE(${idx})">🖨️ Imprimir / Salvar PDF</button>` : ''}
         ${g.linha_digitavel ? `<button class="btn btn-secondary btn-sm" onclick="copyText('${g.linha_digitavel}')">📋 Copiar Linha Digitável</button>` : ''}
       </div>
     </div>
@@ -971,6 +974,7 @@ function buildGuideCard(g, idx) {
   card.dataset.gnreXml = g.gnre_xml || '';
   card.dataset.pdfB64 = g.pdf_base64 || '';
   card.dataset.uf = g.uf;
+  card.dataset.guia = JSON.stringify(g);
   return card;
 }
 
@@ -1002,6 +1006,351 @@ function downloadBlob(content, name, type) {
   a.download = name;
   a.click();
   URL.revokeObjectURL(a.href);
+}
+
+function printGNRE(idx) {
+  const card = document.querySelectorAll('.guide-card')[idx];
+  const g = JSON.parse(card?.dataset?.guia || '{}');
+  const r = window._lastResult || {};
+  const xmlStr = card?.dataset?.gnreXml || '';
+
+  // ── Parse GNRE XML for detailed emitente/dest data ──────────────────────────
+  let emit = { cnpj: '', nome: r.emitente || '', endereco: '', cep: '', uf: r.uf_emit || '', municipio: '', ie: '' };
+  let dest = { cnpj: '', cpf: '', nome: r.destinatario || '', municipio: '', uf: g.uf || '', ie: '' };
+  let docOrigem = '';
+  let convenio = '';
+
+  if (xmlStr) {
+    try {
+      const xdoc = new DOMParser().parseFromString(xmlStr, 'application/xml');
+      const NS = 'http://www.gnre.pe.gov.br';
+      function xget(parent, tag) {
+        const el = (parent || xdoc).getElementsByTagNameNS(NS, tag)[0]
+               || (parent || xdoc).getElementsByTagName(tag)[0];
+        return el ? el.textContent.trim() : '';
+      }
+      const emEl = xdoc.getElementsByTagNameNS(NS, 'contribuinteEmitente')[0]
+                || xdoc.getElementsByTagName('contribuinteEmitente')[0];
+      if (emEl) {
+        emit.cnpj    = xget(emEl, 'CNPJ');
+        emit.ie      = xget(emEl, 'IE');
+        emit.nome    = xget(emEl, 'razaoSocial') || emit.nome;
+        emit.endereco= xget(emEl, 'endereco');
+        emit.cep     = xget(emEl, 'cep');
+        emit.uf      = xget(emEl, 'uf') || emit.uf;
+        emit.municipio = xget(emEl, 'municipio');
+      }
+      const dtEl = xdoc.getElementsByTagNameNS(NS, 'contribuinteDestinatario')[0]
+                || xdoc.getElementsByTagName('contribuinteDestinatario')[0];
+      if (dtEl) {
+        dest.cnpj    = xget(dtEl, 'CNPJ');
+        dest.cpf     = xget(dtEl, 'CPF');
+        dest.ie      = xget(dtEl, 'IE');
+        dest.nome    = xget(dtEl, 'razaoSocial') || dest.nome;
+        dest.municipio = xget(dtEl, 'municipio');
+      }
+      docOrigem = xget(null, 'documentoOrigem');
+      convenio  = xget(null, 'convenio');
+    } catch(e) {}
+  }
+
+  // ── Field values ─────────────────────────────────────────────────────────────
+  const uf       = g.uf || '';
+  const barcode  = (g.codigo_barras || '').replace(/\s/g, '');
+  const linha    = g.linha_digitavel || '';
+  const valor    = Number(g.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const venc     = g.data_vencimento || '';
+  const codRec   = g.receita_codigo || '';
+  const chave    = r.chave_nfe || docOrigem || '';
+  const nNf      = r.n_nf || '';
+  const qrPix    = g.qrcode_pix || '';
+  const refPer   = nNf ? nNf.padStart(20, '0') : '';
+  const infoL1   = convenio || (nNf ? `NF ${nNf}${r.destinatario ? ' de ' + r.destinatario : ''}` : '');
+  const infoL2   = chave ? `CHAVE DA NFe ${chave}` : '';
+
+  // ── Format helpers ────────────────────────────────────────────────────────────
+  function fmtDoc(d) {
+    if (!d) return '';
+    d = d.replace(/\D/g,'');
+    if (d.length === 14) return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,'$1.$2.$3/$4-$5');
+    if (d.length === 11) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4');
+    return d;
+  }
+  function fmtCEP(c) { c=(c||'').replace(/\D/g,''); return c.length===8?c.replace(/(\d{5})(\d{3})/,'$1-$2'):c; }
+
+  const SEFAZ_NAMES = {
+    'AC':'ESTADO DO ACRE','AL':'ESTADO DE ALAGOAS','AM':'ESTADO DO AMAZONAS',
+    'AP':'ESTADO DO AMAPÁ','BA':'ESTADO DA BAHIA','CE':'ESTADO DO CEARÁ',
+    'DF':'DISTRITO FEDERAL','GO':'ESTADO DE GOIÁS','MA':'ESTADO DO MARANHÃO',
+    'MG':'ESTADO DE MINAS GERAIS','MS':'ESTADO DO MATO GROSSO DO SUL',
+    'MT':'ESTADO DO MATO GROSSO','PA':'ESTADO DO PARÁ','PB':'ESTADO DA PARAÍBA',
+    'PE':'ESTADO DE PERNAMBUCO','PI':'ESTADO DO PIAUÍ','PR':'ESTADO DO PARANÁ',
+    'RJ':'ESTADO DO RIO DE JANEIRO','RN':'ESTADO DO RIO GRANDE DO NORTE',
+    'RO':'ESTADO DE RONDÔNIA','RR':'ESTADO DE RORAIMA',
+    'RS':'ESTADO DO RIO GRANDE DO SUL','SC':'ESTADO DE SANTA CATARINA',
+    'SE':'ESTADO DE SERGIPE','TO':'ESTADO DO TOCANTINS'
+  };
+  const stateName = SEFAZ_NAMES[uf] || `ESTADO (${uf})`;
+
+  // ── Build one via (copy) ──────────────────────────────────────────────────────
+  function buildVia(bcId) {
+    const emitDoc = fmtDoc(emit.cnpj);
+    const destDoc = fmtDoc(dest.cnpj || dest.cpf);
+    const emitCep = fmtCEP(emit.cep);
+
+    return `
+<table class="via">
+  <colgroup>
+    <col style="width:120px">
+    <col style="width:22px">
+    <col>
+    <col style="width:70px">
+    <col style="width:115px">
+    <col style="width:22px">
+  </colgroup>
+
+  <!-- Header -->
+  <tr>
+    <td class="logo-cell" rowspan="2">
+      <div class="brasao">⊕</div>
+      <div class="state-name">${stateName}</div>
+      <div class="sefaz-line">SECRETARIA DA FAZENDA</div>
+      <div class="guia-type">GUIA DE ARRECADAÇÃO - GA</div>
+    </td>
+    <td colspan="2" class="hdr-guia-num">
+      <span class="lbl">Guia Nº</span>
+    </td>
+    <td colspan="2" class="hdr-guia-val"></td>
+    <td class="auth-cell" rowspan="8"><span class="auth-rot">A u t e n t i c a ç ã o</span></td>
+  </tr>
+  <tr>
+    <td colspan="2" class="hdr-ref-lbl">Referência / Período de Apuração</td>
+    <td colspan="2" class="hdr-ref-val"><span class="mono">${refPer}</span></td>
+  </tr>
+
+  <!-- Emitente -->
+  <tr>
+    <td class="rot-label" rowspan="3"><span class="rot">Emitente</span></td>
+    <td class="data-cell" colspan="2" rowspan="3">
+      ${emit.ie ? `<div class="drow"><span class="dlbl">Inscrição Estadual:</span> ${emit.ie}</div>` : ''}
+      <div class="drow"><span class="dlbl">Nome:</span> <b>${emit.nome}</b></div>
+      ${emit.endereco ? `<div class="drow"><span class="dlbl">Endereço:</span> ${emit.endereco}${emitCep ? `&nbsp;&nbsp; CEP:${emitCep}` : ''}</div>` : ''}
+      <div class="drow"><span class="dlbl">Município:</span>${emit.municipio ? ` ${emit.municipio}` : ''}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="dlbl">Telefone:</span>&nbsp;&nbsp;&nbsp;&nbsp;<span class="dlbl">UF:</span> ${emit.uf}</div>
+      ${emitDoc ? `<div class="drow"><span class="dlbl">CNPJ:</span> ${emitDoc}</div>` : ''}
+    </td>
+    <td class="fl">Município</td>
+    <td class="fr"></td>
+  </tr>
+  <tr>
+    <td class="fl">Nº Documento de Origem</td>
+    <td class="fr mono" style="font-size:7px">${chave ? chave.slice(0,22) : ''}</td>
+  </tr>
+  <tr>
+    <td class="fl">Parcela</td>
+    <td class="fr">Data Vencimento<br><b>${venc}</b></td>
+  </tr>
+
+  <!-- Destinatário -->
+  <tr>
+    <td class="rot-label" rowspan="3"><span class="rot">Destinatário</span></td>
+    <td class="data-cell" colspan="2" rowspan="3">
+      ${dest.ie ? `<div class="drow"><span class="dlbl">Inscrição Estadual:</span> ${dest.ie}</div>` : ''}
+      <div class="drow"><span class="dlbl">Nome:</span> <b>${dest.nome}</b></div>
+      <div class="drow"><span class="dlbl">Endereço:</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="dlbl">CEP:</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div>
+      <div class="drow"><span class="dlbl">Município:</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="dlbl">Telefone:</span>&nbsp;&nbsp;&nbsp;&nbsp;<span class="dlbl">UF:</span> ${uf}</div>
+      ${destDoc ? `<div class="drow"><span class="dlbl">${dest.cnpj ? 'CNPJ' : 'CPF'}:</span> ${destDoc}</div>` : ''}
+    </td>
+    <td class="fl">Código<br><b>${codRec}</b></td>
+    <td class="fr">Valor<br><b>R$&nbsp;${valor}</b></td>
+  </tr>
+  <tr>
+    <td class="fl"></td>
+    <td class="fr"></td>
+  </tr>
+  <tr>
+    <td class="fl"></td>
+    <td class="fr"></td>
+  </tr>
+
+  <!-- Informações Complementares -->
+  <tr>
+    <td class="rot-label rot-label-sm"><span class="rot" style="font-size:6px">Informações<br>Complementares</span></td>
+    <td class="data-cell" colspan="4" style="padding:3px 4px">
+      ${infoL1 ? `<div class="drow">${infoL1}</div>` : ''}
+      ${infoL2 ? `<div class="drow" style="word-break:break-all">${infoL2}</div>` : ''}
+      <div style="margin-top:4px;font-size:8px">Com barras pagar no banco de sua preferência. Com QR code pagar com PIX.</div>
+    </td>
+  </tr>
+
+  <!-- Bottom bar -->
+  <tr>
+    <td colspan="6" class="bottom-bar">
+      <table class="bottom-inner">
+        <tr>
+          <td>Documento válido para pagamento até: <b>${venc}</b></td>
+          <td class="bc">Código Controle<br>Taxas</td>
+          <td class="bc">Especificação da Receita<br>ICMS</td>
+          <td class="bc tot">Total<br><b>R$&nbsp;${valor}</b></td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- Linha digitável + Barcode -->
+  <tr>
+    <td colspan="6" class="bc-cell">
+      <div class="linha-txt">${linha}</div>
+      <div class="bc-wrap"><svg id="${bcId}"></svg></div>
+    </td>
+  </tr>
+</table>`;
+  }
+
+  // ── QR Code section (middle between copies) ───────────────────────────────────
+  const pixSection = qrPix
+    ? `<div class="pix-section">
+        <div class="pix-left">
+          <div style="font-size:9px;margin-bottom:6px">Com QR Code pagar em qualquer<br>instituição financeira participante do Pix</div>
+          <canvas id="qr-canvas" width="160" height="160"></canvas>
+          <div style="font-size:9px;margin-top:6px">Total:&nbsp;<b>R$&nbsp;${valor}</b></div>
+        </div>
+        <div class="pix-right">
+          <div class="brasao" style="font-size:28px">⊕</div>
+          <div style="font-size:9px;font-weight:bold;text-align:center;margin-top:4px">${stateName}<br>SECRETARIA DA FAZENDA<br><b>GUIA DE ARRECADAÇÃO - GA</b></div>
+          <div class="pix-logo">PIX</div>
+        </div>
+      </div>`
+    : `<div class="cut-line">- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -</div>`;
+
+  // ── Full page HTML ────────────────────────────────────────────────────────────
+  const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>GNRE ${uf}${nNf ? ' - NF ' + nNf : ''}</title>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><\/script>
+${qrPix ? `<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"><\/script>` : ''}
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Arial, Helvetica, sans-serif; font-size: 8.5px; color: #000; background: #fff; padding: 14px 18px; }
+
+.via { width: 100%; border-collapse: collapse; margin-bottom: 0; }
+.via td { border: 1px solid #555; padding: 2px 4px; vertical-align: top; }
+
+/* Logo header cell */
+.logo-cell { text-align: center; vertical-align: middle; padding: 4px; }
+.brasao { font-size: 22px; color: #333; }
+.state-name { font-size: 7.5px; font-weight: bold; line-height: 1.3; margin-top: 2px; }
+.sefaz-line { font-size: 7px; }
+.guia-type { font-size: 7.5px; font-weight: bold; margin-top: 1px; }
+
+/* Header fields */
+.hdr-guia-num { font-size: 8px; font-weight: bold; border-bottom: none; }
+.hdr-guia-val { font-size: 9px; }
+.hdr-ref-lbl  { font-size: 7.5px; border-top: none; }
+.hdr-ref-val  { font-size: 8px; }
+
+/* Autenticação rotated label */
+.auth-cell { text-align: center; vertical-align: middle; padding: 0; width: 20px; border-left: 1px solid #555; }
+.auth-rot { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 7.5px; letter-spacing: 2px; font-style: italic; white-space: nowrap; }
+
+/* Section rotated labels (Emitente, Destinatário, etc.) */
+.rot-label { text-align: center; vertical-align: middle; padding: 0; width: 20px; }
+.rot-label-sm { text-align: center; vertical-align: middle; padding: 0; width: 20px; }
+.rot { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 7.5px; font-weight: bold; white-space: nowrap; display: inline-block; }
+
+/* Main data cell */
+.data-cell { vertical-align: top; padding: 2px 4px; font-size: 8px; line-height: 1.5; }
+.drow { margin-bottom: 1px; }
+.dlbl { font-size: 7.5px; color: #333; }
+
+/* Right field/value columns */
+.fl { font-size: 7.5px; color: #333; vertical-align: top; padding: 1px 3px; white-space: nowrap; }
+.fr { font-size: 8.5px; vertical-align: top; padding: 1px 3px; }
+
+/* Bottom bar */
+.bottom-bar { padding: 0; border-top: 1.5px solid #000; }
+.bottom-inner { width: 100%; border-collapse: collapse; font-size: 8px; }
+.bottom-inner td { border: none; padding: 2px 6px; vertical-align: middle; }
+.bottom-inner td.bc { border-left: 1px solid #555; text-align: center; white-space: nowrap; }
+.bottom-inner td.tot { font-size: 9px; border-left: 1px solid #555; white-space: nowrap; }
+
+/* Barcode row */
+.bc-cell { text-align: center; padding: 4px; border-top: 1.5px solid #000; }
+.linha-txt { font-family: monospace; font-size: 10px; margin-bottom: 4px; letter-spacing: 1px; word-break: break-all; }
+.bc-wrap svg { max-width: 100%; height: 55px; }
+
+/* Misc */
+.mono { font-family: monospace; }
+.lbl { font-size: 7.5px; font-weight: normal; color: #444; }
+
+/* Middle section (PIX / cut line) */
+.cut-line { text-align: center; font-size: 9px; color: #888; padding: 8px 0; letter-spacing: 1px; margin: 6px 0; }
+.pix-section { display: flex; align-items: center; border-top: 1px dashed #999; border-bottom: 1px dashed #999; margin: 8px 0; padding: 10px 0; }
+.pix-left { flex: 1; text-align: center; padding: 0 20px; border-right: 1px solid #ccc; }
+.pix-right { flex: 1; text-align: center; padding: 0 20px; }
+.pix-logo { font-size: 20px; font-weight: 900; color: #32bcad; font-family: sans-serif; margin-top: 6px; letter-spacing: -1px; }
+
+/* Via label (CONTRIBUINTE / BANCO) */
+.via-label { font-size: 9px; font-weight: bold; text-align: right; padding: 2px 0 2px; letter-spacing: 1px; }
+
+/* Print button */
+.print-btn { display: block; margin: 14px auto 0; padding: 8px 28px; background: #1a56db; color: #fff; border: none; border-radius: 5px; font-size: 13px; cursor: pointer; }
+@media print {
+  body { padding: 6px; }
+  .print-btn { display: none; }
+  .cut-line, .pix-section { page-break-inside: avoid; }
+}
+</style>
+</head>
+<body>
+
+<div class="via-label">CONTRIBUINTE</div>
+${buildVia('bc1')}
+
+${pixSection}
+
+<div class="via-label">BANCO</div>
+${buildVia('bc2')}
+
+<button class="print-btn" onclick="window.print()">🖨️ Imprimir / Salvar como PDF</button>
+
+<script>
+(function() {
+  ${barcode ? `
+  ['bc1','bc2'].forEach(function(id) {
+    try {
+      JsBarcode('#' + id, '${barcode}', {
+        format: 'ITF',
+        displayValue: false,
+        width: 1.4,
+        height: 50,
+        margin: 0
+      });
+    } catch(e) {
+      try {
+        JsBarcode('#' + id, '${barcode}', {
+          format: 'CODE128',
+          displayValue: false,
+          width: 1.4,
+          height: 50,
+          margin: 0
+        });
+      } catch(e2) {}
+    }
+  });` : ''}
+  ${qrPix ? `
+  try {
+    QRCode.toCanvas(document.getElementById('qr-canvas'), '${qrPix.replace(/'/g,"\\'")}', { width: 160, margin: 1 }, function(){});
+  } catch(e) {}` : ''}
+})();
+<\/script>
+</body>
+</html>`;
+
+  const win = window.open('', '_blank', 'width=860,height=900');
+  win.document.write(html);
+  win.document.close();
 }
 
 // ── Utilities ──────────────────────────────────────────────────────────────────

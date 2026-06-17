@@ -577,6 +577,7 @@ def gerar_gnre(
                 data_vencimento=data_pag.strftime("%d/%m/%Y"),
                 codigo_barras=ws_result.get("codigo_barras"),
                 linha_digitavel=ws_result.get("linha_digitavel"),
+                qrcode_pix=ws_result.get("qrcode_pix"),
                 gnre_xml=xml_str,
                 status=ws_result.get("status", "erro"),
                 mensagem=ws_result.get("mensagem"),

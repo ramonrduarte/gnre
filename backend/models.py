@@ -147,6 +147,7 @@ class GuiaGerada(BaseModel):
     data_vencimento: Optional[str] = None
     codigo_barras: Optional[str] = None
     linha_digitavel: Optional[str] = None
+    qrcode_pix: Optional[str] = None
     pdf_base64: Optional[str] = None
     gnre_xml: Optional[str] = None
     status: str  # "gerada" | "pendente_webservice" | "erro"
