@@ -29,8 +29,9 @@ services:
       DATABASE_URL: ${DATABASE_URL}
 
       # ── GNRE WebService ────────────────────────────────────────────────────
-      # 1 = Produção | 2 = Homologação (padrão)
-      GNRE_AMBIENTE: ${GNRE_AMBIENTE:-2}
+      # 1 = Produção (RECOMENDADO) | 2 = Homologação
+      # IMPORTANTE: defina GNRE_AMBIENTE=1 nas variáveis de ambiente do Portainer
+      GNRE_AMBIENTE: ${GNRE_AMBIENTE:-1}
 
       # ── SP DARE-ICMS ───────────────────────────────────────────────────────
       SP_DARE_CODIGO_DIFAL: ${SP_DARE_CODIGO_DIFAL:-064-2}
