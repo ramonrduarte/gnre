@@ -224,8 +224,13 @@ def _extrair_dare_do_zip(zip_bytes: bytes) -> tuple[str, str, str, str]:
                 linha = " ".join(m.groups())
                 barcode = re.sub(r"[-\s]", "", linha)
 
-            # Número do DARE
-            m2 = re.search(r"09\s*-\s*N[úu]mero do DARE\s*\n?\s*(\d{10,20})", full_text)
+            # Número do DARE — label fica na linha de cabeçalho, número aparece
+            # duas linhas abaixo (depois da linha com CNPJ/telefone/qtd).
+            # Fallback: formato "NNNN-0001" na via do contribuinte.
+            m2 = (
+                re.search(r"09\s*-\s*N[úu]mero do DARE\s*\n[^\n]*\n\s*(\d{10,20})", full_text)
+                or re.search(r"(\d{13,20})-\d{4}\b", full_text)
+            )
             if m2:
                 numero_dare = m2.group(1)
 
