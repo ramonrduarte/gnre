@@ -1104,8 +1104,8 @@ function printGNRE(idx) {
     return `
 <table class="via">
   <colgroup>
-    <col style="width:115px">
     <col style="width:20px">
+    <col style="width:115px">
     <col>
     <col style="width:78px">
     <col style="width:112px">
@@ -1114,20 +1114,20 @@ function printGNRE(idx) {
 
   <!-- Header -->
   <tr>
-    <td class="logo-cell" rowspan="2">
+    <td class="logo-cell" colspan="2" rowspan="2">
       <div class="brasao">⊕</div>
       <div class="state-name">${stateName}</div>
       <div class="sefaz-line">SECRETARIA DA FAZENDA</div>
       <div class="guia-type">GUIA DE ARRECADAÇÃO - GA</div>
     </td>
-    <td colspan="4" class="hdr-cell">
+    <td colspan="3" class="hdr-cell">
       <span class="hdr-lbl">Guia Nº</span>
       <span class="hdr-num mono">${guiaNum}</span>
     </td>
     <td class="auth-cell" rowspan="12"><span class="auth-rot">A u t e n t i c a ç ã o</span></td>
   </tr>
   <tr>
-    <td colspan="4" class="hdr-cell">
+    <td colspan="3" class="hdr-cell">
       <span class="hdr-lbl">Referência / Período de Apuração</span>
       <span class="hdr-num mono">${refPer}</span>
     </td>
