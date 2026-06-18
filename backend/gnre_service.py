@@ -342,6 +342,8 @@ def _post_soap(url: str, soap_bytes: bytes, cert: tuple[str, str] | None, soap_a
         return resp.text
     except requests.exceptions.SSLError as exc:
         raise RuntimeError(f"Erro SSL ao conectar ao GNRE: {exc}") from exc
+    except requests.exceptions.Timeout as exc:
+        raise RuntimeError(f"Timeout ao conectar ao WebService GNRE ({url}): {exc}") from exc
     except requests.exceptions.ConnectionError as exc:
         raise RuntimeError(f"Sem conexão com WebService GNRE ({url}): {exc}") from exc
     except requests.exceptions.HTTPError as exc:
@@ -352,6 +354,8 @@ def _post_soap(url: str, soap_bytes: bytes, cert: tuple[str, str] | None, soap_a
             "Verifique se o acesso ao WebService foi solicitado no portal GNRE "
             "(automacao.jsp → 'Solicitar uso do WebService')."
         ) from exc
+    except requests.exceptions.RequestException as exc:
+        raise RuntimeError(f"Erro inesperado ao conectar ao GNRE: {exc}") from exc
 
 
 # ── Response parsers ──────────────────────────────────────────────────────────
