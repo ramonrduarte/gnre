@@ -1065,8 +1065,10 @@ function printGNRE(idx) {
   const nNf      = r.n_nf || '';
   const qrPix    = g.qrcode_pix || '';
   const refPer   = nNf ? nNf.padStart(20, '0') : '';
+  const guiaNum  = g.numero_guia || '';
   const infoL1   = convenio || (nNf ? `NF ${nNf}${r.destinatario ? ' de ' + r.destinatario : ''}` : '');
   const infoL2   = chave ? `CHAVE DA NFe ${chave}` : '';
+  const bankText = 'Com barras pagar no banco de sua preferência. Com QR code pagar com PIX.';
 
   // ── Format helpers ────────────────────────────────────────────────────────────
   function fmtDoc(d) {
@@ -1097,16 +1099,17 @@ function printGNRE(idx) {
     const emitDoc = fmtDoc(emit.cnpj);
     const destDoc = fmtDoc(dest.cnpj || dest.cpf);
     const emitCep = fmtCEP(emit.cep);
+    const destCep = fmtCEP(dest.cep);
 
     return `
 <table class="via">
   <colgroup>
-    <col style="width:120px">
-    <col style="width:22px">
-    <col>
-    <col style="width:70px">
     <col style="width:115px">
-    <col style="width:22px">
+    <col style="width:20px">
+    <col>
+    <col style="width:78px">
+    <col style="width:112px">
+    <col style="width:20px">
   </colgroup>
 
   <!-- Header -->
@@ -1117,15 +1120,17 @@ function printGNRE(idx) {
       <div class="sefaz-line">SECRETARIA DA FAZENDA</div>
       <div class="guia-type">GUIA DE ARRECADAÇÃO - GA</div>
     </td>
-    <td colspan="2" class="hdr-guia-num">
-      <span class="lbl">Guia Nº</span>
+    <td colspan="4" class="hdr-cell">
+      <span class="hdr-lbl">Guia Nº</span>
+      <span class="hdr-num mono">${guiaNum}</span>
     </td>
-    <td colspan="2" class="hdr-guia-val"></td>
-    <td class="auth-cell" rowspan="8"><span class="auth-rot">A u t e n t i c a ç ã o</span></td>
+    <td class="auth-cell" rowspan="12"><span class="auth-rot">A u t e n t i c a ç ã o</span></td>
   </tr>
   <tr>
-    <td colspan="2" class="hdr-ref-lbl">Referência / Período de Apuração</td>
-    <td colspan="2" class="hdr-ref-val"><span class="mono">${refPer}</span></td>
+    <td colspan="4" class="hdr-cell">
+      <span class="hdr-lbl">Referência / Período de Apuração</span>
+      <span class="hdr-num mono">${refPer}</span>
+    </td>
   </tr>
 
   <!-- Emitente -->
@@ -1134,20 +1139,19 @@ function printGNRE(idx) {
     <td class="data-cell" colspan="2" rowspan="3">
       ${emit.ie ? `<div class="drow"><span class="dlbl">Inscrição Estadual:</span> ${emit.ie}</div>` : ''}
       <div class="drow"><span class="dlbl">Nome:</span> <b>${emit.nome}</b></div>
-      ${emit.endereco ? `<div class="drow"><span class="dlbl">Endereço:</span> ${emit.endereco}${emitCep ? `&nbsp;&nbsp; CEP:${emitCep}` : ''}</div>` : ''}
-      <div class="drow"><span class="dlbl">Município:</span>${emit.municipio ? ` ${emit.municipio}` : ''}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="dlbl">Telefone:</span>&nbsp;&nbsp;&nbsp;&nbsp;<span class="dlbl">UF:</span> ${emit.uf}</div>
-      ${emitDoc ? `<div class="drow"><span class="dlbl">CNPJ:</span> ${emitDoc}</div>` : ''}
+      ${emit.endereco ? `<div class="drow drow-flex"><span><span class="dlbl">Endereço:</span> ${emit.endereco}</span>${emitCep ? `<span><span class="dlbl">CEP:</span>${emitCep}</span>` : ''}</div>` : ''}
+      <div class="drow"><span class="dlbl">Município:</span>${emit.municipio ? ` ${emit.municipio}` : ''}&nbsp;&nbsp;&nbsp;<span class="dlbl">Telefone:</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="dlbl">UF:</span> ${emit.uf}</div>
     </td>
     <td class="fl">Município</td>
-    <td class="fr"></td>
-  </tr>
-  <tr>
     <td class="fl">Nº Documento de Origem</td>
-    <td class="fr mono" style="font-size:7px">${chave ? chave.slice(0,22) : ''}</td>
   </tr>
   <tr>
     <td class="fl">Parcela</td>
-    <td class="fr">Data Vencimento<br><b>${venc}</b></td>
+    <td class="fl">Data Vencimento</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td class="fr-venc"><b>${venc}</b></td>
   </tr>
 
   <!-- Destinatário -->
@@ -1156,30 +1160,37 @@ function printGNRE(idx) {
     <td class="data-cell" colspan="2" rowspan="3">
       ${dest.ie ? `<div class="drow"><span class="dlbl">Inscrição Estadual:</span> ${dest.ie}</div>` : ''}
       <div class="drow"><span class="dlbl">Nome:</span> <b>${dest.nome}</b></div>
-      <div class="drow"><span class="dlbl">Endereço:</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="dlbl">CEP:</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div>
-      <div class="drow"><span class="dlbl">Município:</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="dlbl">Telefone:</span>&nbsp;&nbsp;&nbsp;&nbsp;<span class="dlbl">UF:</span> ${uf}</div>
+      ${dest.endereco
+        ? `<div class="drow drow-flex"><span><span class="dlbl">Endereço:</span> ${dest.endereco}</span>${destCep ? `<span><span class="dlbl">CEP:</span> ${destCep}</span>` : ''}</div>`
+        : `<div class="drow"><span class="dlbl">Endereço:</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="dlbl">CEP:</span></div>`}
+      <div class="drow"><span class="dlbl">Município:</span>${dest.municipio ? ` ${dest.municipio}` : ''}&nbsp;&nbsp;&nbsp;<span class="dlbl">Telefone:</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="dlbl">UF:</span> ${uf}</div>
       ${destDoc ? `<div class="drow"><span class="dlbl">${dest.cnpj ? 'CNPJ' : 'CPF'}:</span> ${destDoc}</div>` : ''}
     </td>
-    <td class="fl">Código<br><b>${codRec}</b></td>
-    <td class="fr">Valor<br><b>R$&nbsp;${valor}</b></td>
+    <td class="fl">Código</td>
+    <td class="fl">Valor</td>
   </tr>
   <tr>
-    <td class="fl"></td>
-    <td class="fr"></td>
+    <td class="fr"><b>${codRec}</b></td>
+    <td class="fr"><b>R$&nbsp;${valor}</b></td>
   </tr>
   <tr>
-    <td class="fl"></td>
-    <td class="fr"></td>
+    <td></td>
+    <td></td>
   </tr>
 
-  <!-- Informações Complementares -->
+  <!-- Informações Complementares (4 linhas) -->
   <tr>
-    <td class="rot-label rot-label-sm"><span class="rot" style="font-size:6px">Informações<br>Complementares</span></td>
-    <td class="data-cell" colspan="4" style="padding:3px 4px">
-      ${infoL1 ? `<div class="drow">${infoL1}</div>` : ''}
-      ${infoL2 ? `<div class="drow" style="word-break:break-all">${infoL2}</div>` : ''}
-      <div style="margin-top:4px;font-size:8px">Com barras pagar no banco de sua preferência. Com QR code pagar com PIX.</div>
-    </td>
+    <td class="rot-label-sm" rowspan="4"><span class="rot" style="font-size:6px">Informações<br>Complementares</span></td>
+    <td class="data-cell" colspan="4">${infoL1 || ''}</td>
+  </tr>
+  <tr>
+    <td class="data-cell" colspan="4" style="word-break:break-all;font-size:7.5px">${infoL2 || ''}</td>
+  </tr>
+  <tr>
+    <td colspan="4" style="height:8px"></td>
+  </tr>
+  <tr>
+    <td class="data-cell bank-row" colspan="4"><b>${bankText}</b></td>
   </tr>
 
   <!-- Bottom bar -->
@@ -1234,39 +1245,43 @@ ${qrPix ? `<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.m
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: Arial, Helvetica, sans-serif; font-size: 8.5px; color: #000; background: #fff; padding: 14px 18px; }
 
-.via { width: 100%; border-collapse: collapse; margin-bottom: 0; }
+.via { width: 100%; border-collapse: collapse; }
 .via td { border: 1px solid #555; padding: 2px 4px; vertical-align: top; }
 
 /* Logo header cell */
-.logo-cell { text-align: center; vertical-align: middle; padding: 4px; }
-.brasao { font-size: 22px; color: #333; }
+.logo-cell { text-align: center; vertical-align: middle; padding: 4px 2px; }
+.brasao { font-size: 24px; color: #333; line-height: 1; }
 .state-name { font-size: 7.5px; font-weight: bold; line-height: 1.3; margin-top: 2px; }
 .sefaz-line { font-size: 7px; }
 .guia-type { font-size: 7.5px; font-weight: bold; margin-top: 1px; }
 
-/* Header fields */
-.hdr-guia-num { font-size: 8px; font-weight: bold; border-bottom: none; }
-.hdr-guia-val { font-size: 9px; }
-.hdr-ref-lbl  { font-size: 7.5px; border-top: none; }
-.hdr-ref-val  { font-size: 8px; }
+/* Header field cells (Guia Nº / Referência) */
+.hdr-cell { padding: 2px 5px; vertical-align: top; }
+.hdr-lbl { display: block; font-size: 7.5px; color: #444; }
+.hdr-num { display: block; font-size: 9px; font-weight: bold; margin-top: 1px; font-family: monospace; }
 
 /* Autenticação rotated label */
-.auth-cell { text-align: center; vertical-align: middle; padding: 0; width: 20px; border-left: 1px solid #555; }
+.auth-cell { text-align: center; vertical-align: middle; padding: 0; border-left: 1px solid #555; }
 .auth-rot { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 7.5px; letter-spacing: 2px; font-style: italic; white-space: nowrap; }
 
-/* Section rotated labels (Emitente, Destinatário, etc.) */
-.rot-label { text-align: center; vertical-align: middle; padding: 0; width: 20px; }
-.rot-label-sm { text-align: center; vertical-align: middle; padding: 0; width: 20px; }
+/* Section rotated labels */
+.rot-label { text-align: center; vertical-align: middle; padding: 0; }
+.rot-label-sm { text-align: center; vertical-align: middle; padding: 0; }
 .rot { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 7.5px; font-weight: bold; white-space: nowrap; display: inline-block; }
 
 /* Main data cell */
 .data-cell { vertical-align: top; padding: 2px 4px; font-size: 8px; line-height: 1.5; }
-.drow { margin-bottom: 1px; }
+.drow { margin-bottom: 0; }
+.drow-flex { display: flex; justify-content: space-between; }
 .dlbl { font-size: 7.5px; color: #333; }
 
 /* Right field/value columns */
 .fl { font-size: 7.5px; color: #333; vertical-align: top; padding: 1px 3px; white-space: nowrap; }
-.fr { font-size: 8.5px; vertical-align: top; padding: 1px 3px; }
+.fr { font-size: 8.5px; font-weight: bold; vertical-align: top; padding: 2px 3px; }
+.fr-venc { font-size: 9px; font-weight: bold; vertical-align: top; padding: 2px 3px; }
+
+/* Bank text (last row of info complementares) */
+.bank-row { font-size: 8px; border-top: 1px solid #888; }
 
 /* Bottom bar */
 .bottom-bar { padding: 0; border-top: 1.5px solid #000; }
@@ -1276,13 +1291,12 @@ body { font-family: Arial, Helvetica, sans-serif; font-size: 8.5px; color: #000;
 .bottom-inner td.tot { font-size: 9px; border-left: 1px solid #555; white-space: nowrap; }
 
 /* Barcode row */
-.bc-cell { text-align: center; padding: 4px; border-top: 1.5px solid #000; }
-.linha-txt { font-family: monospace; font-size: 10px; margin-bottom: 4px; letter-spacing: 1px; word-break: break-all; }
-.bc-wrap svg { max-width: 100%; height: 55px; }
+.bc-cell { text-align: center; padding: 4px 2px 2px; border-top: 1.5px solid #000; }
+.linha-txt { font-family: monospace; font-size: 10px; margin-bottom: 4px; letter-spacing: 1.5px; }
+.bc-wrap svg { max-width: 100%; height: 60px; }
 
 /* Misc */
 .mono { font-family: monospace; }
-.lbl { font-size: 7.5px; font-weight: normal; color: #444; }
 
 /* Middle section (PIX / cut line) */
 .cut-line { text-align: center; font-size: 9px; color: #888; padding: 8px 0; letter-spacing: 1px; margin: 6px 0; }
@@ -1292,7 +1306,7 @@ body { font-family: Arial, Helvetica, sans-serif; font-size: 8.5px; color: #000;
 .pix-logo { font-size: 20px; font-weight: 900; color: #32bcad; font-family: sans-serif; margin-top: 6px; letter-spacing: -1px; }
 
 /* Via label (CONTRIBUINTE / BANCO) */
-.via-label { font-size: 9px; font-weight: bold; text-align: right; padding: 2px 0 2px; letter-spacing: 1px; }
+.via-label { font-size: 9px; font-weight: bold; text-align: right; padding: 2px 0; letter-spacing: 1px; }
 
 /* Print button */
 .print-btn { display: block; margin: 14px auto 0; padding: 8px 28px; background: #1a56db; color: #fff; border: none; border-radius: 5px; font-size: 13px; cursor: pointer; }

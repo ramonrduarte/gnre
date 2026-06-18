@@ -464,6 +464,7 @@ def _parse_resultado(soap_text: str) -> dict:
     barcode = _find(root, "codigoBarras")
     linha = _find(root, "linhaDigitavel")
     qrcode = _find(root, "qrcodePayload")
+    numero_guia = _find(root, "numeroGuia") or None
     # Motivo de rejeição específico (dentro de motivosRejeicao)
     motivo_rej = _find_motivos_rejeicao(root)
 
@@ -474,6 +475,7 @@ def _parse_resultado(soap_text: str) -> dict:
                 "codigo_barras": barcode or None,
                 "linha_digitavel": linha or None,
                 "qrcode_pix": qrcode or None,
+                "numero_guia": numero_guia,
                 "mensagem": descricao,
             }
         return {
@@ -491,6 +493,7 @@ def _parse_resultado(soap_text: str) -> dict:
                 "codigo_barras": barcode,
                 "linha_digitavel": linha or None,
                 "qrcode_pix": qrcode or None,
+                "numero_guia": numero_guia,
                 "mensagem": descricao,
             }
         return {
@@ -578,6 +581,7 @@ def gerar_gnre(
                 codigo_barras=ws_result.get("codigo_barras"),
                 linha_digitavel=ws_result.get("linha_digitavel"),
                 qrcode_pix=ws_result.get("qrcode_pix"),
+                numero_guia=ws_result.get("numero_guia"),
                 gnre_xml=xml_str,
                 status=ws_result.get("status", "erro"),
                 mensagem=ws_result.get("mensagem"),
