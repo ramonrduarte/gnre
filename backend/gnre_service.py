@@ -469,6 +469,8 @@ def _parse_resultado(soap_text: str) -> dict:
     linha = _find(root, "linhaDigitavel")
     qrcode = _find(root, "qrcodePayload")
     numero_guia = _find(root, "numeroGuia") or None
+    # Log temporário: lista todos os campos da resposta para diagnosticar PIX
+    logger.info("GNRE resposta campos: %s", [el.tag.split('}')[-1] for el in root.iter() if el.text and el.text.strip()])
     # Motivo de rejeição específico (dentro de motivosRejeicao)
     motivo_rej = _find_motivos_rejeicao(root)
 
