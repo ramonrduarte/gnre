@@ -134,6 +134,7 @@ def calcular_difal_manual(form: FormularioManual) -> NFeDados:
         destinatario=destinatario,
         difal=difal,
         data_pagamento=data_pag,
+        reemitir=form.reemitir,
         opcoes_gnre={
             k: v for k, v in {
                 "detalhamento_receita": form.detalhamento_receita,

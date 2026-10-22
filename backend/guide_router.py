@@ -24,6 +24,7 @@ from dare_sp_service import gerar_dare_sp
 from dare_es_service import gerar_dua_es
 from difal_calculator import build_calculo_from_nfe
 from cert_manager import get_cert_paths
+from guia_store import guias_ativas_da_nfe, para_guia_gerada, salvar_resultado
 
 
 _PORTAL_GNRE = "https://www.gnre.pe.gov.br:444/gnre/portal/GNRE_Principal.jsp"
@@ -180,6 +181,33 @@ async def gerar_guias_completo(dados: NFeDados, db: Session | None = None) -> Re
     fecp_val = dados.difal.v_fcp_uf_dest
     calculo = build_calculo_from_nfe(dados)
 
+    def _resultado(guias: list[GuiaGerada], portal_url: str | None, ja_emitida: bool = False) -> ResultadoGuias:
+        return ResultadoGuias(
+            chave_nfe=dados.chave_nfe,
+            uf_emit=dados.uf_emit,
+            uf_dest=uf_dest,
+            n_nf=dados.n_nf,
+            dh_emi=dados.dh_emi,
+            emitente=dados.emitente.razao_social,
+            destinatario=dados.destinatario.nome,
+            calculo=calculo,
+            guias=guias,
+            portal_url=portal_url,
+            ja_emitida=ja_emitida,
+        )
+
+    # NF-e já com guia gerada/aguardando e não vencida → devolve a existente (evita pagar em dobro)
+    if db is not None and not dados.reemitir:
+        existentes = guias_ativas_da_nfe(db, dados.chave_nfe)
+        if existentes:
+            aviso = (f"Guia desta NF-e já emitida em {existentes[0].criado_em:%d/%m/%Y %H:%M}. "
+                     "Nada foi emitido de novo (use reemitir=true para emitir outra).")
+            return _resultado(
+                [para_guia_gerada(g).model_copy(update={"mensagem": f"{aviso}\n{g.mensagem or ''}".strip()})
+                 for g in existentes],
+                None, ja_emitida=True,
+            )
+
     guias: list[GuiaGerada] = []
 
     if uf_usa_gnre(uf_dest):
@@ -208,15 +236,7 @@ async def gerar_guias_completo(dados: NFeDados, db: Session | None = None) -> Re
         original = guias[0].mensagem or ""
         guias[0] = guias[0].model_copy(update={"mensagem": f"⚠️ {warning}\n{original}".strip()})
 
-    return ResultadoGuias(
-        chave_nfe=dados.chave_nfe,
-        uf_emit=dados.uf_emit,
-        uf_dest=uf_dest,
-        n_nf=dados.n_nf,
-        dh_emi=dados.dh_emi,
-        emitente=dados.emitente.razao_social,
-        destinatario=dados.destinatario.nome,
-        calculo=calculo,
-        guias=guias,
-        portal_url=portal_url,
-    )
+    resultado = _resultado(guias, portal_url)
+    if db is not None:
+        resultado = salvar_resultado(db, dados, resultado)
+    return resultado

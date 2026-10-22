@@ -139,6 +139,7 @@ Endpoints principais:
 |---|---|---|
 | `POST` | `/api/gerar/json` | Gerar guias a partir de JSON (uma NF-e por chamada) |
 | `POST` | `/api/gerar/xml` | Gerar guias a partir do XML da NF-e |
+| `GET` | `/api/guias` | Histórico de guias emitidas (busca por NF, chave, destinatário) |
 | `GET` | `/api/gnre/resultado/{recibo}` | Reconsultar lote que ficou `processando` |
 | `GET` | `/api/gnre/config/{uf}/{receita}` | Regras da UF no portal GNRE |
 | `GET` | `/api/empresas` | Listar empresas cadastradas |

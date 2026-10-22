@@ -12,6 +12,12 @@ Company management:
   DELETE   /api/empresas/{cnpj}/certificado
   GET      /api/empresas/{cnpj}/cert-status
 
+Guide history:
+  GET  /api/guias                         — guias emitidas (busca por NF, chave, destinatário)
+  GET  /api/guias/{id}                    — guia completa (XML/PDF) para impressão
+  POST /api/guias/{id}/atualizar          — reconsulta guia 'processando'
+  POST /api/guias/atualizar-pendentes     — reconsulta todas as 'processando'
+
 GNRE:
   GET /api/gnre/config/{uf}/{receita}   — regras da UF no portal GNRE (GnreConfigUF)
   GET /api/gnre/resultado/{recibo}      — reconsulta lote que ficou 'processando'
@@ -23,6 +29,7 @@ Utilities:
 """
 import asyncio
 import os
+from datetime import date, datetime, time
 from pathlib import Path
 from contextlib import asynccontextmanager
 
@@ -129,13 +136,125 @@ async def gnre_resultado(numero_recibo: str, cnpj: str | None = None, db: Sessio
     """
     from gnre_service import consultar_recibo
 
+    from database import Guia
+    from guia_store import aplicar_resultado
+
     cert = _cert_empresa(db, cnpj)
     if not cert:
         raise HTTPException(400, "Nenhuma empresa com certificado A1 encontrada para a consulta.")
     try:
-        return await asyncio.to_thread(consultar_recibo, numero_recibo, cert)
+        result = await asyncio.to_thread(consultar_recibo, numero_recibo, cert)
     except RuntimeError as exc:
         raise HTTPException(502, str(exc))
+    # Mantém o histórico em dia (um recibo = um lote = uma guia)
+    for g in db.query(Guia).filter(Guia.numero_recibo == numero_recibo).all():
+        aplicar_resultado(db, g, result)
+    return result
+
+
+# ── Histórico de guias ─────────────────────────────────────────────────────────
+
+@app.get("/api/guias")
+async def listar_guias(
+    busca: str | None = None,
+    status: str | None = None,
+    uf: str | None = None,
+    de: date | None = None,
+    ate: date | None = None,
+    limite: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    """
+    Guias emitidas, mais recentes primeiro.
+    busca: número da NF, chave de acesso, nome ou documento do destinatário.
+    status: gerada | processando | pendente_webservice | erro.  de/ate: data de emissão da guia (AAAA-MM-DD).
+    """
+    from sqlalchemy import or_
+    from database import Guia
+    from guia_store import para_item
+
+    q = db.query(Guia).filter(Guia.ambiente == os.getenv("GNRE_AMBIENTE", "2"))
+    if busca:
+        b = busca.strip()
+        dig = "".join(c for c in b if c.isdigit())
+        conds = [Guia.destinatario.ilike(f"%{b}%")]
+        if dig:
+            conds += [Guia.n_nf.in_({dig, dig.lstrip("0") or dig}), Guia.chave_nfe.contains(dig), Guia.doc_dest == dig]
+        q = q.filter(or_(*conds))
+    if status:
+        q = q.filter(Guia.status == status)
+    if uf:
+        q = q.filter(Guia.uf_dest == uf.upper())
+    if de:
+        q = q.filter(Guia.criado_em >= datetime.combine(de, time.min))
+    if ate:
+        q = q.filter(Guia.criado_em <= datetime.combine(ate, time.max))
+    total = q.count()
+    itens = q.order_by(Guia.id.desc()).offset(offset).limit(min(limite, 500)).all()
+    return {"total": total, "itens": [para_item(g) for g in itens]}
+
+
+@app.get("/api/guias/{guia_id}")
+async def obter_guia(guia_id: int, db: Session = Depends(get_db)):
+    """Guia completa (inclui XML enviado e PDF, quando houver) — usada para imprimir."""
+    from database import Guia
+    from guia_store import para_item
+
+    g = db.get(Guia, guia_id)
+    if not g:
+        raise HTTPException(404, "Guia não encontrada.")
+    return para_item(g, completa=True)
+
+
+@app.post("/api/guias/{guia_id}/atualizar")
+async def atualizar_guia(guia_id: int, db: Session = Depends(get_db)):
+    """Reconsulta no portal GNRE uma guia que ficou 'processando'."""
+    from database import Guia
+    from gnre_service import consultar_recibo
+    from guia_store import aplicar_resultado, para_item
+
+    g = db.get(Guia, guia_id)
+    if not g:
+        raise HTTPException(404, "Guia não encontrada.")
+    if g.tipo != "GNRE" or not g.numero_recibo:
+        raise HTTPException(400, "Só guias GNRE com recibo podem ser reconsultadas.")
+    cert = _cert_empresa(db, g.cnpj_emit)
+    if not cert:
+        raise HTTPException(400, "Empresa emitente sem certificado A1 para a consulta.")
+    try:
+        result = await asyncio.to_thread(consultar_recibo, g.numero_recibo, cert)
+    except RuntimeError as exc:
+        raise HTTPException(502, str(exc))
+    return para_item(aplicar_resultado(db, g, result))
+
+
+@app.post("/api/guias/atualizar-pendentes")
+async def atualizar_pendentes(db: Session = Depends(get_db)):
+    """Reconsulta todas as guias GNRE em 'processando' do ambiente atual."""
+    from database import Guia
+    from gnre_service import consultar_recibo
+    from guia_store import aplicar_resultado
+
+    pendentes = db.query(Guia).filter(
+        Guia.ambiente == os.getenv("GNRE_AMBIENTE", "2"),
+        Guia.status == "processando",
+        Guia.numero_recibo.isnot(None),
+    ).all()
+    resumo = {"consultadas": 0, "geradas": 0, "erros": 0, "ainda_processando": 0}
+    for g in pendentes:
+        cert = _cert_empresa(db, g.cnpj_emit)
+        if not cert:
+            continue
+        try:
+            result = await asyncio.to_thread(consultar_recibo, g.numero_recibo, cert)
+        except RuntimeError:
+            continue
+        aplicar_resultado(db, g, result)
+        resumo["consultadas"] += 1
+        chave = {"gerada": "geradas", "erro": "erros"}.get(g.status, "ainda_processando")
+        resumo[chave] += 1
+    return resumo
 
 
 def _cert_empresa(db: Session, cnpj: str | None) -> tuple[str, str] | None:
@@ -155,15 +274,17 @@ def _cert_empresa(db: Session, cnpj: str | None) -> tuple[str, str] | None:
 @app.post("/api/gerar/xml", response_model=ResultadoGuias)
 async def gerar_por_xml(
     file: UploadFile = File(...),
+    reemitir: bool = False,
     db: Session = Depends(get_db),
 ):
     """
     Generate DIFAL guides from NF-e XML upload.
     If the emitente CNPJ is registered, loads address and certificate automatically.
+    reemitir=true emite nova guia mesmo que a NF-e já tenha uma gerada e não vencida.
     """
     content = await file.read()
     try:
-        dados = parse_nfe_xml(content)
+        dados = parse_nfe_xml(content).model_copy(update={"reemitir": reemitir})
     except ValueError as exc:
         raise HTTPException(400, str(exc))
     try:

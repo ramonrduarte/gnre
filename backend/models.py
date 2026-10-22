@@ -63,6 +63,8 @@ class NFeDados(BaseModel):
     data_pagamento: Optional[date] = None
     # Sobrescritas opcionais para a GNRE: detalhamento_receita, produto, convenio, campos_extras
     opcoes_gnre: Optional[dict] = None
+    # True = emite nova guia mesmo que a NF-e já tenha uma gerada e não vencida
+    reemitir: bool = False
 
 
 # ── Input schemas ──────────────────────────────────────────────────────────────
@@ -125,6 +127,9 @@ class FormularioManual(BaseModel):
     detalhamento_receita: Optional[str] = Field(None, description="Código do detalhamento da receita (ver GET /api/gnre/config/{uf}/{receita})")
     produto: Optional[str] = Field(None, description="Código do produto GNRE (ver GET /api/gnre/config/{uf}/{receita})")
     convenio: Optional[str] = Field(None, description="Texto do campo convênio (até 30 caracteres)")
+    reemitir: bool = Field(
+        False, description="Emitir nova guia mesmo se a NF-e já tiver guia gerada/aguardando e não vencida",
+    )
     campos_extras: Optional[dict[str, str]] = Field(
         None, description="Valores de campos extras por código, ex: {\"117\": \"2026-10-20\"} — sobrescreve o preenchimento automático",
     )
@@ -162,7 +167,8 @@ class FormularioManual(BaseModel):
 # ── Output schemas ─────────────────────────────────────────────────────────────
 
 class GuiaGerada(BaseModel):
-    tipo: str  # "GNRE" | "DARE-SP"
+    id: Optional[int] = None  # id no histórico (GET /api/guias/{id})
+    tipo: str  # "GNRE" | "DARE-SP" | "DUA-ES"
     uf: str
     receita_codigo: Optional[str] = None
     receita_descricao: str
@@ -175,8 +181,9 @@ class GuiaGerada(BaseModel):
     numero_recibo: Optional[str] = None  # recibo do lote GNRE — use em GET /api/gnre/resultado/{recibo}
     pdf_base64: Optional[str] = None
     gnre_xml: Optional[str] = None
-    status: str  # "gerada" | "pendente_webservice" | "erro"
+    status: str  # "gerada" | "processando" | "pendente_webservice" | "erro"
     mensagem: Optional[str] = None
+    criado_em: Optional[str] = None  # dd/mm/aaaa hh:mm
 
 
 class DIFALCalculo(BaseModel):
@@ -200,3 +207,5 @@ class ResultadoGuias(BaseModel):
     calculo: DIFALCalculo
     guias: list[GuiaGerada]
     portal_url: Optional[str] = None
+    # True = a NF-e já tinha guia gerada/aguardando dentro do vencimento; nada foi emitido de novo
+    ja_emitida: bool = False

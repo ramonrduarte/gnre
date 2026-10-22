@@ -147,6 +147,26 @@
     box-shadow: 0 1px 3px rgba(0,0,0,.05);
   }
   .card h2 { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: var(--gray-700); }
+  /* Guias emitidas */
+  .guias-filtros { display: grid; grid-template-columns: 2fr repeat(4, minmax(120px, 1fr)); gap: .75rem; }
+  .guias-resumo { display: flex; gap: .5rem; flex-wrap: wrap; margin: 1rem 0 .5rem; font-size: .8rem; color: var(--gray-600); }
+  .guias-resumo span { background: var(--gray-100); border-radius: 999px; padding: .2rem .7rem; }
+  .guias-wrap { overflow-x: auto; }
+  .guias-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+  .guias-table th { text-align: left; padding: .5rem .45rem; color: var(--gray-600); font-weight: 600;
+                    background: var(--gray-50); border-bottom: 1px solid var(--gray-200); white-space: nowrap; }
+  .guias-table td { padding: .55rem .45rem; border-bottom: 1px solid var(--gray-100); vertical-align: top; }
+  .guias-table tr:hover td { background: var(--gray-50); }
+  .guias-table .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .guias-table .gs-nf { white-space: nowrap; font-weight: 600; }
+  .guias-table .gs-sub { display: block; font-size: .72rem; color: var(--gray-600); font-weight: 400; }
+  .guias-table .gs-msg { display: block; max-width: 260px; font-size: .72rem; color: #991b1b; margin-top: .25rem; }
+  .guias-table .gs-acoes { display: flex; gap: .3rem; flex-wrap: nowrap; }
+  .guias-table .guide-badge { white-space: nowrap; }
+  .guias-table .btn-sm { padding: .3rem .55rem; }
+  .gs-vazio { text-align: center; color: var(--gray-600); padding: 1.5rem !important; }
+  .badge-vencida { background: #ffedd5; color: #9a3412; }
+  @media (max-width: 760px) { .guias-filtros { grid-template-columns: 1fr 1fr; } .gf-busca { grid-column: 1 / -1; } }
   .api-fields { width: 100%; border-collapse: collapse; font-size: .8rem; }
   .api-fields th, .api-fields td { text-align: left; padding: .4rem .6rem; border-bottom: 1px solid var(--gray-200); vertical-align: top; }
   .api-fields th { color: var(--gray-600); font-weight: 600; background: var(--gray-50); }
@@ -398,6 +418,7 @@
     <button class="tab-btn active" data-tab="tab-xml">📄 Upload XML NF-e</button>
     <button class="tab-btn" data-tab="tab-manual">✏️ Formulário Manual</button>
     <button class="tab-btn" data-tab="tab-api">🔌 API / JSON</button>
+    <button class="tab-btn" data-tab="tab-guias">📋 Guias emitidas</button>
     <button class="tab-btn" data-tab="tab-empresas">🏢 Empresas</button>
   </div>
 
@@ -637,6 +658,60 @@
     </div>
   </div>
 
+  <!-- ── Tab: Guias emitidas ──────────────────────────────────────────────── -->
+  <div id="tab-guias" class="tab-panel">
+    <div class="card">
+      <h2>Guias emitidas</h2>
+      <div class="guias-filtros">
+        <div class="field gf-busca">
+          <label for="gs-busca">Buscar</label>
+          <input id="gs-busca" placeholder="Nº da NF, chave, destinatário ou CPF/CNPJ"
+                 onkeydown="if (event.key === 'Enter') carregarGuias()">
+        </div>
+        <div class="field">
+          <label for="gs-status">Status</label>
+          <select id="gs-status" onchange="carregarGuias()">
+            <option value="">Todos</option>
+            <option value="gerada">Gerada</option>
+            <option value="processando">Aguardando UF</option>
+            <option value="pendente_webservice">Pendente</option>
+            <option value="erro">Erro</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="gs-uf">UF destino</label>
+          <select id="gs-uf" onchange="carregarGuias()"><option value="">Todas</option></select>
+        </div>
+        <div class="field">
+          <label for="gs-de">Emitida de</label>
+          <input type="date" id="gs-de" onchange="carregarGuias()">
+        </div>
+        <div class="field">
+          <label for="gs-ate">até</label>
+          <input type="date" id="gs-ate" onchange="carregarGuias()">
+        </div>
+      </div>
+      <div class="btn-row" style="margin-top:.75rem">
+        <button class="btn btn-primary btn-sm" onclick="carregarGuias()">🔍 Buscar</button>
+        <button class="btn btn-secondary btn-sm" onclick="limparFiltrosGuias()">Limpar filtros</button>
+        <button class="btn btn-secondary btn-sm" id="gs-btn-pendentes" onclick="atualizarPendentes(this)">🔄 Atualizar guias aguardando UF</button>
+      </div>
+      <div id="gs-resumo" class="guias-resumo"></div>
+      <div class="guias-wrap">
+        <table class="guias-table">
+          <thead>
+            <tr>
+              <th>Emitida em</th><th>NF-e</th><th>UF</th><th>Destinatário</th><th>Receita</th>
+              <th class="num">Valor</th><th>Vencimento</th><th>Status</th><th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="gs-body"><tr><td colspan="9" class="gs-vazio">Carregando…</td></tr></tbody>
+        </table>
+      </div>
+      <div id="gs-mais" style="text-align:center;margin-top:.75rem"></div>
+    </div>
+  </div>
+
   <!-- ── Tab 4: Empresas ──────────────────────────────────────────────────── -->
   <div id="tab-empresas" class="tab-panel">
     <div style="display:grid;grid-template-columns:320px 1fr;gap:1rem;align-items:start">
@@ -740,6 +815,7 @@ document.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
       btn.classList.add('active');
       document.getElementById(btn.dataset.tab).classList.add('active');
+      if (btn.dataset.tab === 'tab-guias') carregarGuias();
     });
   });
 
@@ -906,6 +982,159 @@ async function gerarPorJSON() {
     body = JSON.parse(document.getElementById('json-body').value);
   } catch { showToast('JSON inválido', 'error'); return; }
   await callAPI('/api/gerar/json', body);
+}
+
+// ── Guias emitidas ─────────────────────────────────────────────────────────────
+const _GS_LIMITE = 100;
+let _gsItens = [];
+let _gsTotal = 0;
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function badgeGuia(g) {
+  if (g.vencida) return '<span class="guide-badge badge-vencida">Vencida</span>';
+  return {
+    gerada: '<span class="guide-badge badge-gerada">✓ Gerada</span>',
+    processando: '<span class="guide-badge badge-pendente">⏳ Aguardando UF</span>',
+    pendente_webservice: '<span class="guide-badge badge-pendente">⏳ Pendente</span>',
+    erro: '<span class="guide-badge badge-erro">✗ Erro</span>',
+  }[g.status] || esc(g.status);
+}
+
+function limparFiltrosGuias() {
+  ['gs-busca', 'gs-status', 'gs-uf', 'gs-de', 'gs-ate'].forEach(id => { document.getElementById(id).value = ''; });
+  carregarGuias();
+}
+
+async function carregarGuias(append = false) {
+  const sel = document.getElementById('gs-uf');
+  if (sel.options.length === 1) {
+    'AC AL AM AP BA CE DF ES GO MA MG MS MT PA PB PE PI PR RJ RN RO RR RS SC SE SP TO'.split(' ')
+      .forEach(uf => sel.add(new Option(uf, uf)));
+  }
+  const params = new URLSearchParams({ limite: _GS_LIMITE, offset: append ? _gsItens.length : 0 });
+  for (const [k, id] of [['busca', 'gs-busca'], ['status', 'gs-status'], ['uf', 'gs-uf'], ['de', 'gs-de'], ['ate', 'gs-ate']]) {
+    const v = document.getElementById(id).value.trim();
+    if (v) params.set(k, v);
+  }
+  try {
+    const res = await fetch(`/api/guias?${params}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(apiErro(data));
+    _gsItens = append ? _gsItens.concat(data.itens) : data.itens;
+    _gsTotal = data.total;
+    renderGuias();
+  } catch (e) {
+    document.getElementById('gs-body').innerHTML = `<tr><td colspan="9" class="gs-vazio">Erro ao carregar: ${esc(e.message)}</td></tr>`;
+  }
+}
+
+function renderGuias() {
+  const total = _gsTotal;
+  const body = document.getElementById('gs-body');
+  if (!_gsItens.length) {
+    body.innerHTML = '<tr><td colspan="9" class="gs-vazio">Nenhuma guia encontrada.</td></tr>';
+  } else {
+    body.innerHTML = _gsItens.map((g, i) => `
+      <tr>
+        <td style="white-space:nowrap">${esc((g.criado_em || '').slice(0, 10))}<span class="gs-sub">${esc((g.criado_em || '').slice(11))}</span></td>
+        <td class="gs-nf">${g.n_nf ? 'NF ' + esc(g.n_nf) : '—'}${g.serie ? ' / ' + esc(g.serie) : ''}
+          ${g.chave_nfe ? `<span class="gs-sub" title="${esc(g.chave_nfe)}">…${esc(g.chave_nfe.slice(-10))}</span>` : ''}</td>
+        <td>${esc(g.uf)}</td>
+        <td>${esc(g.destinatario || '')}<span class="gs-sub">${esc(g.doc_dest || '')}</span></td>
+        <td style="white-space:nowrap">${g.receita_codigo === '100129' ? 'FCP' : 'DIFAL'}<span class="gs-sub">${esc(g.tipo)} ${esc(g.receita_codigo || '')}</span></td>
+        <td class="num">${fmt(g.valor)}</td>
+        <td style="white-space:nowrap">${esc(g.data_vencimento || '')}</td>
+        <td>${badgeGuia(g)}${g.status === 'erro' && g.mensagem ? `<span class="gs-msg">${esc(g.mensagem)}</span>` : ''}</td>
+        <td><div class="gs-acoes">
+          ${g.status === 'gerada' && (g.codigo_barras || g.tipo !== 'GNRE') ? `<button class="btn btn-primary btn-sm" onclick="imprimirGuia(${i}, this)">🖨️ Imprimir</button>` : ''}
+          ${g.linha_digitavel ? `<button class="btn btn-secondary btn-sm" title="Copiar linha digitável" onclick="copyText('${esc(g.linha_digitavel)}')">📋</button>` : ''}
+          ${g.status === 'processando' && g.numero_recibo ? `<button class="btn btn-secondary btn-sm" title="Consultar a UF de novo" onclick="atualizarGuia(${i}, this)">🔄</button>` : ''}
+          <button class="btn btn-secondary btn-sm" title="Baixar XML enviado" onclick="baixarXmlGuia(${i})">⬇️</button>
+        </div></td>
+      </tr>`).join('');
+  }
+  const cont = s => _gsItens.filter(g => (s === 'vencida' ? g.vencida : g.status === s && !g.vencida)).length;
+  document.getElementById('gs-resumo').innerHTML = `
+    <span>${total} guia(s)</span>
+    <span>✓ ${cont('gerada')} geradas</span>
+    <span>⏳ ${cont('processando')} aguardando UF</span>
+    ${cont('vencida') ? `<span>${cont('vencida')} vencidas</span>` : ''}
+    ${cont('erro') ? `<span>✗ ${cont('erro')} com erro</span>` : ''}
+    ${_gsItens.length < total ? `<span>mostrando ${_gsItens.length}</span>` : ''}`;
+  document.getElementById('gs-mais').innerHTML = _gsItens.length < total
+    ? '<button class="btn btn-secondary btn-sm" onclick="carregarGuias(true)">Carregar mais</button>' : '';
+}
+
+async function guiaCompleta(i) {
+  const res = await fetch(`/api/guias/${_gsItens[i].id}`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(apiErro(data));
+  return data;
+}
+
+async function imprimirGuia(i, btn) {
+  setLoading(btn, true, '');
+  try {
+    const g = await guiaCompleta(i);
+    if (g.tipo === 'GNRE') {
+      printGuia(g, g, g.gnre_xml || '');
+    } else if (g.pdf_base64) {
+      const bytes = Uint8Array.from(atob(g.pdf_base64), c => c.charCodeAt(0));
+      window.open(URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' })), '_blank');
+    } else {
+      showToast('Esta guia não tem PDF para imprimir.', 'error');
+    }
+  } catch (e) {
+    showToast('Erro: ' + e.message, 'error');
+  } finally {
+    setLoading(btn, false);
+  }
+}
+
+async function baixarXmlGuia(i) {
+  try {
+    const g = await guiaCompleta(i);
+    if (!g.gnre_xml) { showToast('Guia sem XML salvo.', 'error'); return; }
+    downloadBlob(g.gnre_xml, `guia_${g.uf}_NF${g.n_nf || g.id}_${g.receita_codigo || ''}.xml`, 'text/xml');
+  } catch (e) {
+    showToast('Erro: ' + e.message, 'error');
+  }
+}
+
+async function atualizarGuia(i, btn) {
+  setLoading(btn, true, 'Consultando...');
+  try {
+    const res = await fetch(`/api/guias/${_gsItens[i].id}/atualizar`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(apiErro(data));
+    _gsItens[i] = data;
+    showToast(data.status === 'gerada' ? 'Guia gerada!' : `Situação: ${data.mensagem || data.status}`,
+              data.status === 'erro' ? 'error' : 'info');
+    renderGuias();
+  } catch (e) {
+    showToast('Erro: ' + e.message, 'error');
+    setLoading(btn, false);
+  }
+}
+
+async function atualizarPendentes(btn) {
+  setLoading(btn, true, 'Consultando...');
+  try {
+    const res = await fetch('/api/guias/atualizar-pendentes', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(apiErro(data));
+    showToast(data.consultadas
+      ? `${data.consultadas} consultada(s): ${data.geradas} gerada(s), ${data.ainda_processando} aguardando, ${data.erros} com erro`
+      : 'Nenhuma guia aguardando UF.');
+    await carregarGuias();
+  } catch (e) {
+    showToast('Erro: ' + e.message, 'error');
+  } finally {
+    setLoading(btn, false);
+  }
 }
 
 // ── Shared API call ────────────────────────────────────────────────────────────
@@ -1079,9 +1308,11 @@ function downloadBlob(content, name, type) {
 
 function printGNRE(idx) {
   const card = document.querySelectorAll('.guide-card')[idx];
-  const g = JSON.parse(card?.dataset?.guia || '{}');
-  const r = window._lastResult || {};
-  const xmlStr = card?.dataset?.gnreXml || '';
+  printGuia(JSON.parse(card?.dataset?.guia || '{}'), window._lastResult || {}, card?.dataset?.gnreXml || '');
+}
+
+// g: guia (GuiaGerada) · r: dados da NF-e {emitente, uf_emit, destinatario, chave_nfe, n_nf} · xmlStr: XML GNRE enviado
+function printGuia(g, r, xmlStr) {
 
   // ── Parse GNRE XML for detailed emitente/dest data ──────────────────────────
   let emit = { cnpj: '', nome: r.emitente || '', endereco: '', cep: '', uf: r.uf_emit || '', municipio: '', ie: '' };
@@ -1480,12 +1711,12 @@ function showToast(msg, type = 'info') {
   setTimeout(() => t.classList.remove('show'), 3000);
 }
 
-function setLoading(btn, loading) {
+function setLoading(btn, loading, texto = 'Gerando...') {
   if (!btn) return;
   if (loading) {
     btn.disabled = true;
     btn.dataset.origText = btn.innerHTML;
-    btn.innerHTML = '<span class="spinner"></span> Gerando...';
+    btn.innerHTML = `<span class="spinner"></span> ${texto}`;
   } else {
     btn.disabled = false;
     btn.innerHTML = btn.dataset.origText || 'Gerar Guias';

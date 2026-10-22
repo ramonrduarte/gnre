@@ -116,9 +116,10 @@ curl -X POST http://192.168.0.110:8002/api/gerar/json \
 | `detalhamento_receita` | `"000055"` | UF exige detalhamento e há mais de uma opção. O sistema já escolhe a opção de DIFAL/FCP automaticamente |
 | `produto` | `"89"` | UF exige o produto da mercadoria |
 | `convenio` | `"EC 87/2015"` | Texto do campo convênio (até 30 caracteres) |
+| `reemitir` | `true` | Emite outra guia mesmo que a NF-e já tenha uma (ver "Guia em dobro" abaixo) |
 | `campos_extras` | `{"117": "2026-10-20"}` | Valor de um campo extra pelo código; sobrescreve o preenchimento automático |
 
-Os códigos aceitos por UF estão em `GET /api/gnre/config/{uf}/{receita}` (seção 3).
+Os códigos aceitos por UF estão em `GET /api/gnre/config/{uf}/{receita}` (seção 4).
 
 ### Resposta
 
@@ -156,8 +157,14 @@ Os códigos aceitos por UF estão em `GET /api/gnre/config/{uf}/{receita}` (seç
 
 Uma NF-e pode gerar **uma ou duas guias** (DIFAL e FCP separados). Trate a lista `guias`.
 
+**Guia em dobro:** todas as guias ficam gravadas no histórico. Se a mesma `chave_nfe` for enviada de
+novo e já tiver guia `gerada` ou `processando` ainda dentro do vencimento, **nada é emitido**: a
+resposta traz as guias existentes e `"ja_emitida": true`. Guias vencidas ou com erro não bloqueiam
+uma nova emissão. Para forçar outra guia, envie `"reemitir": true` (no XML: `/api/gerar/xml?reemitir=true`).
+
 | Campo da guia | Descrição |
 |---|---|
+| `id` | Id da guia no histórico (`GET /api/guias/{id}`) |
 | `status` | Ver tabela abaixo |
 | `linha_digitavel` / `codigo_barras` | Para pagamento no banco |
 | `qrcode_pix` | PIX copia-e-cola, quando a UF aceita PIX |
@@ -186,7 +193,51 @@ antes de consultar o resultado). Configure o timeout do cliente HTTP para **pelo
 
 ---
 
-## 2. Reconsultar lote — `GET /api/gnre/resultado/{numero_recibo}`
+## 2. Histórico de guias — `GET /api/guias`
+
+Consulta as guias já emitidas (o mesmo que a aba **Guias emitidas** da interface), mais recentes primeiro.
+Útil para o ERP verificar se a guia de uma nota já existe e qual a situação.
+
+| Parâmetro | Exemplo | Descrição |
+|---|---|---|
+| `busca` | `12345` | Número da NF, parte da chave, nome ou CPF/CNPJ do destinatário |
+| `status` | `gerada` | `gerada`, `processando`, `pendente_webservice` ou `erro` |
+| `uf` | `MG` | UF de destino |
+| `de`, `ate` | `2026-10-01` | Período de emissão da guia |
+| `limite`, `offset` | `100`, `0` | Paginação (máx. 500 por página) |
+
+```bash
+curl "http://192.168.0.110:8002/api/guias?busca=43261092613413000160550010000123451000123459"
+```
+
+```json
+{
+  "total": 2,
+  "itens": [
+    {
+      "id": 2, "tipo": "GNRE", "uf": "MG", "receita_codigo": "100129", "valor": "20.00",
+      "data_vencimento": "23/10/2026", "status": "gerada", "vencida": false,
+      "linha_digitavel": "...", "codigo_barras": "...", "numero_recibo": "...",
+      "chave_nfe": "...", "n_nf": "12345", "destinatario": "JOAO DA SILVA",
+      "criado_em": "22/10/2026 17:37", "ambiente": "producao"
+    }
+  ]
+}
+```
+
+Outras rotas do histórico:
+
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | `/api/guias/{id}` | Guia completa, com o XML enviado e o PDF (quando houver) |
+| POST | `/api/guias/{id}/atualizar` | Reconsulta na UF uma guia `processando` e grava o resultado |
+| POST | `/api/guias/atualizar-pendentes` | Reconsulta todas as guias `processando` |
+
+`vencida: true` = guia gerada cujo vencimento já passou (uma nova emissão da NF-e é permitida).
+
+---
+
+## 3. Reconsultar lote — `GET /api/gnre/resultado/{numero_recibo}`
 
 Para guias que voltaram com `status: "processando"`.
 
@@ -210,7 +261,7 @@ curl "http://192.168.0.110:8002/api/gnre/resultado/26000000039396?cnpj=926134130
 
 ---
 
-## 3. Regras da UF — `GET /api/gnre/config/{uf}/{receita}`
+## 4. Regras da UF — `GET /api/gnre/config/{uf}/{receita}`
 
 Mostra o que o portal GNRE exige para a receita na UF (`100102` = DIFAL, `100129` = FCP),
 no ambiente configurado: detalhamentos, produtos, campos extras, se aceita PIX, se o FCP vai
@@ -222,7 +273,7 @@ curl "http://192.168.0.110:8002/api/gnre/config/MT/100102"
 
 ---
 
-## 4. Alternativa: enviar o XML da NF-e — `POST /api/gerar/xml`
+## 5. Alternativa: enviar o XML da NF-e — `POST /api/gerar/xml`
 
 Se for mais simples para o ERP, envie o próprio XML autorizado (`nfeProc` ou `NFe`)
 como arquivo multipart. Todos os campos acima são lidos do XML.
