@@ -168,7 +168,8 @@ async def listar_guias(
     """
     Guias emitidas, mais recentes primeiro.
     busca: número da NF, chave de acesso, nome ou documento do destinatário.
-    status: gerada | processando | pendente_webservice | erro.  de/ate: data de emissão da guia (AAAA-MM-DD).
+    status: gerada | processando | pendente_webservice | erro | vencida.  de/ate: data de emissão da guia (AAAA-MM-DD).
+    contagem: quantidade por status com os demais filtros aplicados.
     """
     from sqlalchemy import or_
     from database import Guia
@@ -182,17 +183,23 @@ async def listar_guias(
         if dig:
             conds += [Guia.n_nf.in_({dig, dig.lstrip("0") or dig}), Guia.chave_nfe.contains(dig), Guia.doc_dest == dig]
         q = q.filter(or_(*conds))
-    if status:
-        q = q.filter(Guia.status == status)
     if uf:
         q = q.filter(Guia.uf_dest == uf.upper())
     if de:
         q = q.filter(Guia.criado_em >= datetime.combine(de, time.min))
     if ate:
         q = q.filter(Guia.criado_em <= datetime.combine(ate, time.max))
+    # Contagem por status com os demais filtros aplicados (atalhos de filtro na tela)
+    from sqlalchemy import func
+    contagem = dict(q.with_entities(Guia.status, func.count()).group_by(Guia.status).all())
+    contagem["vencida"] = q.filter(Guia.status == "gerada", Guia.vencimento < date.today()).count()
+    if status == "vencida":
+        q = q.filter(Guia.status == "gerada", Guia.vencimento < date.today())
+    elif status:
+        q = q.filter(Guia.status == status)
     total = q.count()
     itens = q.order_by(Guia.id.desc()).offset(offset).limit(min(limite, 500)).all()
-    return {"total": total, "itens": [para_item(g) for g in itens]}
+    return {"total": total, "contagem": contagem, "itens": [para_item(g) for g in itens]}
 
 
 @app.get("/api/guias/{guia_id}")
