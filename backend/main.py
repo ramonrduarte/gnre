@@ -12,11 +12,16 @@ Company management:
   DELETE   /api/empresas/{cnpj}/certificado
   GET      /api/empresas/{cnpj}/cert-status
 
+GNRE:
+  GET /api/gnre/config/{uf}/{receita}   — regras da UF no portal GNRE (GnreConfigUF)
+  GET /api/gnre/resultado/{recibo}      — reconsulta lote que ficou 'processando'
+
 Utilities:
   GET /api/uf/{uf}   — state config (rates, codes)
   GET /api/ufs       — all states
   GET /api/status    — health check
 """
+import asyncio
 import os
 from pathlib import Path
 from contextlib import asynccontextmanager
@@ -99,6 +104,50 @@ async def listar_ufs():
         uf: {"aliq_interna": UF_ALIQ_INTERNA[uf], "fecp": UF_FECP[uf]}
         for uf in sorted(UF_ALIQ_INTERNA)
     }
+
+
+@app.get("/api/gnre/config/{uf}/{receita}")
+async def gnre_config_uf(uf: str, receita: str = "100102", cnpj: str | None = None, db: Session = Depends(get_db)):
+    """
+    Regras de preenchimento da receita na UF, consultadas no portal GNRE (GnreConfigUF, cache 24h).
+    Mostra detalhamentos, produtos e campos extras aceitos — úteis para os campos opcionais da API.
+    cnpj: empresa cujo certificado será usado na consulta (padrão: primeira empresa com certificado).
+    """
+    from gnre_config import obter_config
+
+    cfg = await asyncio.to_thread(obter_config, uf.upper(), receita, _cert_empresa(db, cnpj))
+    if cfg is None:
+        raise HTTPException(503, "Não foi possível consultar o GNRE (cadastre uma empresa com certificado A1).")
+    return {"uf": uf.upper(), "receita": receita, "ambiente": os.getenv("GNRE_AMBIENTE", "2"), **cfg}
+
+
+@app.get("/api/gnre/resultado/{numero_recibo}")
+async def gnre_resultado(numero_recibo: str, cnpj: str | None = None, db: Session = Depends(get_db)):
+    """
+    Consulta novamente um lote GNRE já enviado — para guias que voltaram com status 'processando'
+    (a UF pode levar até 1 hora). Use o numero_recibo devolvido na geração e o mesmo cnpj emitente.
+    """
+    from gnre_service import consultar_recibo
+
+    cert = _cert_empresa(db, cnpj)
+    if not cert:
+        raise HTTPException(400, "Nenhuma empresa com certificado A1 encontrada para a consulta.")
+    try:
+        return await asyncio.to_thread(consultar_recibo, numero_recibo, cert)
+    except RuntimeError as exc:
+        raise HTTPException(502, str(exc))
+
+
+def _cert_empresa(db: Session, cnpj: str | None) -> tuple[str, str] | None:
+    """Certificado da empresa informada, ou da primeira empresa cadastrada com certificado."""
+    from database import Empresa
+    from cert_manager import get_cert_paths
+
+    q = db.query(Empresa).filter(Empresa.tem_certificado.is_(True))
+    if cnpj:
+        q = q.filter(Empresa.cnpj == "".join(c for c in cnpj if c.isdigit()))
+    emp = q.first()
+    return get_cert_paths(emp.cnpj) if emp else None
 
 
 # ── Guide generation ───────────────────────────────────────────────────────────

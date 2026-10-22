@@ -74,8 +74,8 @@ class EmpresaOut(BaseModel):
     cert_cn: Optional[str]
     cert_validade: Optional[str]
     cert_emitente: Optional[str]
-    criado_em: datetime
-    atualizado_em: datetime
+    criado_em: Optional[datetime] = None      # registros antigos podem ter NULL
+    atualizado_em: Optional[datetime] = None
 
     class Config:
         from_attributes = True

@@ -35,7 +35,7 @@ def process_pfx(cnpj: str, pfx_bytes: bytes, password: str) -> dict:
     """
     pwd = password.encode("utf-8") if password else None
     try:
-        private_key, cert, _chain = pkcs12.load_key_and_certificates(pfx_bytes, pwd)
+        private_key, cert, chain = pkcs12.load_key_and_certificates(pfx_bytes, pwd)
     except Exception as exc:
         raise ValueError(f"Não foi possível abrir o certificado. Verifique a senha. Detalhe: {exc}") from exc
 
@@ -46,8 +46,11 @@ def process_pfx(cnpj: str, pfx_bytes: bytes, password: str) -> dict:
 
     cert_dir = _cert_dir(cnpj)
 
-    # Save certificate
-    cert_pem = cert.public_bytes(Encoding.PEM)
+    # Save certificate + intermediate chain (ICP-Brasil ACs) — the GNRE/DUA servers
+    # validate the full chain during the TLS handshake.
+    cert_pem = cert.public_bytes(Encoding.PEM) + b"".join(
+        c.public_bytes(Encoding.PEM) for c in (chain or []) if c != cert
+    )
     (cert_dir / "cert.pem").write_bytes(cert_pem)
 
     # Save private key (unencrypted PEM)

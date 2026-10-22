@@ -2,8 +2,9 @@
 
 Sistema web para geração automática de guias de recolhimento de DIFAL (EC 87/2015).
 
-- **GNRE** — todos os estados via WebService nacional (gnre.pe.gov.br)
-- **DARE-ICMS SP** — São Paulo via automação do portal da Fazenda SP
+- **GNRE** — demais estados via WebService nacional (gnre.pe.gov.br)
+- **DARE-ICMS SP** — São Paulo via portal da Fazenda SP (CAPTCHA: upload manual do XML)
+- **DUA-e ES** — Espírito Santo via WebService da SEFAZ-ES
 
 ## Funcionalidades
 
@@ -11,7 +12,7 @@ Sistema web para geração automática de guias de recolhimento de DIFAL (EC 87/
 - Cadastro de empresas emitentes com dados e certificado A1
 - Upload de certificado PFX/P12 — extraído e armazenado com segurança
 - Cálculo automático de DIFAL e FECP por UF (alíquotas configuradas)
-- Roteamento automático SP → DARE-ICMS | demais UFs → GNRE
+- Roteamento automático SP → DARE-ICMS | ES → DUA-e | demais UFs → GNRE
 - API REST com Swagger UI em `/docs`
 
 ---
@@ -108,12 +109,16 @@ gnre/
 │   ├── uf_config.py         # Alíquotas e códigos GNRE por UF
 │   ├── difal_calculator.py  # Cálculo DIFAL / FCP
 │   ├── gnre_service.py      # Geração XML GNRE + WebService SOAP
+│   ├── gnre_config.py       # Regras por UF via GnreConfigUF (cache 24h)
+│   ├── dare_es_service.py   # DUA-e ES (WebService SEFAZ-ES)
 │   ├── dare_sp_service.py   # Automação DARE-ICMS SP (Playwright)
 │   ├── guide_router.py      # Roteamento por UF
 │   ├── empresa_router.py    # CRUD empresas + certificados
 │   └── cert_manager.py      # Upload e extração de PFX/P12
 ├── frontend/
 │   └── index.html           # SPA (vanilla JS)
+├── docs/
+│   └── API.md               # Guia de integração da API
 ├── Dockerfile
 ├── docker-compose.yml       # Dev local com Postgres
 ├── portainer-stack.yml      # Produção via Portainer
@@ -124,32 +129,44 @@ gnre/
 
 ## API
 
+**Guia completo de integração (campos obrigatórios, exemplos, status): [docs/API.md](docs/API.md)**
+
 Documentação interativa disponível em `/docs` (Swagger UI) após iniciar o servidor.
 
 Endpoints principais:
 
 | Método | Rota | Descrição |
 |---|---|---|
-| `POST` | `/api/gerar/xml` | Gerar guias a partir de XML NF-e |
-| `POST` | `/api/gerar/json` | Gerar guias a partir de JSON |
+| `POST` | `/api/gerar/json` | Gerar guias a partir de JSON (uma NF-e por chamada) |
+| `POST` | `/api/gerar/xml` | Gerar guias a partir do XML da NF-e |
+| `GET` | `/api/gnre/resultado/{recibo}` | Reconsultar lote que ficou `processando` |
+| `GET` | `/api/gnre/config/{uf}/{receita}` | Regras da UF no portal GNRE |
 | `GET` | `/api/empresas` | Listar empresas cadastradas |
 | `POST` | `/api/empresas` | Cadastrar / atualizar empresa |
 | `POST` | `/api/empresas/{cnpj}/certificado` | Upload do certificado A1 (PFX) |
-| `GET` | `/api/uf/{uf}` | Configuração de alíquotas de um estado |
 
 ---
 
 ## Observações sobre o GNRE WebService
 
-O envio automático ao WebService GNRE requer:
-1. **Certificado A1** cadastrado na empresa (via aba Empresas na interface)
-2. **Ambiente de homologação** (`GNRE_AMBIENTE=2`) para testes — requer cadastro em gnre.pe.gov.br
-3. **Ambiente de produção** (`GNRE_AMBIENTE=1`) para emissão real
+Manual oficial: *Manual de Integração do Contribuinte GNRE v2.17* (gnre.pe.gov.br → Downloads).
 
-Quando o certificado não está configurado, o sistema gera o **XML GNRE** para download e retorna o link do portal para preenchimento manual.
+O envio automático requer:
+1. **Certificado A1 (e-CNPJ)** cadastrado na empresa (aba Empresas)
+2. CNPJ habilitado em gnre.pe.gov.br → Automação → *Solicitar uso do WebService*
+   (pedido separado para produção e para homologação em www.testegnre.pe.gov.br)
+3. `GNRE_AMBIENTE=2` (homologação, guias sem valor) ou `GNRE_AMBIENTE=1` (produção)
 
-**Códigos GNRE para DIFAL EC 87/2015:**
-- `100122` — ICMS Diferencial de Alíquota (consumidor final)
-- `100131` — FCP/FECP (Fundo de Combate à Pobreza)
+Endereços dos WebServices (seção 4 do manual):
+- Produção: `https://www.gnre.pe.gov.br/gnreWS/services/...`
+- Homologação: `https://www.testegnre.pe.gov.br/gnreWS/services/...` (sem a porta 444; o
+  certificado do servidor de testes não confere com o hostname, por isso a verificação SSL
+  fica desligada só em homologação)
 
-> Verifique os códigos com a SEFAZ de cada estado — podem variar. Edite `backend/uf_config.py` para ajustar.
+**Receitas usadas:** `100102` — ICMS Consumidor Final Não Contribuinte Outra UF por Operação (DIFAL)
+e `100129` — FCP por Operação. As regras de preenchimento de cada UF (documento de origem,
+referência, campos extras, detalhamento, FCP no mesmo guia) são consultadas no serviço
+**GnreConfigUF** e guardadas em `data/gnre_config_cache.json` por 24h. A tabela de
+`backend/uf_config.py` só é usada quando não há certificado para consultar o portal.
+
+SP e ES não estão habilitados no GNRE (GnreConfigUF retorna 999): SP usa DARE-ICMS e ES usa DUA-e.

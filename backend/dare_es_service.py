@@ -219,6 +219,7 @@ def _build_emis_dua_xml(
     el("vRec",  f"{valor:.2f}")
     el("qtde",  "1")
     el("xIde",  x_ide)
+    el("fPix",  "true")   # AP19: gera QR Code PIX (copia e cola em xPix no retorno)
 
     return etree.tostring(
         root, pretty_print=False, xml_declaration=True, encoding="UTF-8"
@@ -362,6 +363,8 @@ def gerar_dua_es(
         data_vencimento=data_pag.strftime("%d/%m/%Y"),
         codigo_barras=result.get("codigo_barras"),
         linha_digitavel=result.get("linha_digitavel"),
+        qrcode_pix=result.get("qrcode_pix"),
+        numero_guia=result.get("numero_dua"),
         gnre_xml=xml_str,
         status=result.get("status", "erro"),
         mensagem=result.get("mensagem"),

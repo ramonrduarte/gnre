@@ -70,7 +70,16 @@ def calcular_difal_manual(form: FormularioManual) -> NFeDados:
         else get_aliq_interestadual(uf_emit, uf_dest, form.produto_importado)
     )
 
-    calc = calcular_difal(form.v_bc_difal, aliq_interna, aliq_inter, aliq_fecp)
+    if form.v_difal is not None:
+        # Valores já calculados pelo ERP (vICMSUFDest / vFCPUFDest da NF-e) — usados como vieram
+        v_difal = _round2(form.v_difal)
+        v_fecp = _round2(form.v_fcp or Decimal("0"))
+        calc = DIFALCalculo(
+            v_bc=form.v_bc_difal or Decimal("0"), p_aliq_interna=aliq_interna, p_aliq_inter=aliq_inter,
+            p_fecp=aliq_fecp, v_difal=v_difal, v_fecp=v_fecp, v_total=v_difal + v_fecp,
+        )
+    else:
+        calc = calcular_difal(form.v_bc_difal, aliq_interna, aliq_inter, aliq_fecp)
 
     # Parse data_pagamento
     data_pag = form.data_pagamento or _default_payment_date()
@@ -104,7 +113,7 @@ def calcular_difal_manual(form: FormularioManual) -> NFeDados:
     )
 
     difal = DadosDIFAL(
-        v_bc_uf_dest=form.v_bc_difal,
+        v_bc_uf_dest=calc.v_bc,
         p_fcp_uf_dest=Decimal(str(aliq_fecp)),
         p_icms_uf_dest=Decimal(str(aliq_interna)),
         p_icms_inter=Decimal(str(aliq_inter)),
@@ -125,6 +134,14 @@ def calcular_difal_manual(form: FormularioManual) -> NFeDados:
         destinatario=destinatario,
         difal=difal,
         data_pagamento=data_pag,
+        opcoes_gnre={
+            k: v for k, v in {
+                "detalhamento_receita": form.detalhamento_receita,
+                "produto": form.produto,
+                "convenio": form.convenio,
+                "campos_extras": form.campos_extras,
+            }.items() if v
+        } or None,
     )
 
 

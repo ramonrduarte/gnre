@@ -434,6 +434,6 @@ def get_uf_config(uf: str) -> dict:
         "uf": uf,
         "aliq_interna": UF_ALIQ_INTERNA.get(uf, 18.0),
         "fecp": UF_FECP.get(uf, 0.0),
-        "gnre_codes": UF_GNRE_CODES.get(uf, {"difal": "100122", "fecp": None}),
+        "gnre_codes": UF_GNRE_CODES.get(uf, {"difal": "100102", "fecp": None}),
         "usa_gnre": uf_usa_gnre(uf),
     }

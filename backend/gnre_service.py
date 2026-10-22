@@ -7,11 +7,12 @@ Fluxo (seção 3.3.2 do manual):
   3. Aguardar ≥30s (requisito do manual)
   4. Consultar GnreResultadoLote com o recibo → guia com código de barras
 
-URLs (produção / homologação configuráveis por env var):
+URLs (produção / homologação configuráveis por env var) — Manual v2.17, seção 4:
   Prod  lote:    https://www.gnre.pe.gov.br/gnreWS/services/GnreLoteRecepcao
   Prod  result:  https://www.gnre.pe.gov.br/gnreWS/services/GnreResultadoLote
-  Homol lote:    https://www.testegnre.pe.gov.br:444/gnreHWS/services/GnreLoteRecepcao
-  Homol result:  https://www.testegnre.pe.gov.br:444/gnreHWS/services/GnreResultadoLote
+  Homol lote:    https://www.testegnre.pe.gov.br/gnreWS/services/GnreLoteRecepcao
+  Homol result:  https://www.testegnre.pe.gov.br/gnreWS/services/GnreResultadoLote
+A porta :444 é só do portal web; o WebService nela responde código 199.
 """
 import os
 import time
@@ -37,19 +38,26 @@ _SOAP_ACTION_RESULT = "http://www.gnre.pe.gov.br/webservice/GnreResultadoLote/co
 _TP_AMB    = os.getenv("GNRE_AMBIENTE", "2")   # 2=homolog, 1=prod
 _CERT      = os.getenv("CERT_PATH", "")
 _KEY       = os.getenv("KEY_PATH", "")
-_SSL_VERIFY = os.getenv("GNRE_SSL_VERIFY", "true").lower() not in ("false", "0", "no")
+# O servidor de homologação usa certificado *.sefaz.pe.gov.br (não confere com
+# www.testegnre.pe.gov.br), então a verificação fica desligada só em homologação.
+_SSL_VERIFY = (os.getenv("GNRE_SSL_VERIFY") or ("true" if _TP_AMB == "1" else "false")
+               ).lower() not in ("false", "0", "no")
+if not _SSL_VERIFY:
+    import urllib3
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 _DEFAULT_PROD_LOTE    = "https://www.gnre.pe.gov.br/gnreWS/services/GnreLoteRecepcao"
 _DEFAULT_PROD_RESULT  = "https://www.gnre.pe.gov.br/gnreWS/services/GnreResultadoLote"
-_DEFAULT_HOMOL_LOTE   = "https://www.testegnre.pe.gov.br:444/gnreWS/services/GnreLoteRecepcao"
-_DEFAULT_HOMOL_RESULT = "https://www.testegnre.pe.gov.br:444/gnreWS/services/GnreResultadoLote"
+_DEFAULT_HOMOL_LOTE   = "https://www.testegnre.pe.gov.br/gnreWS/services/GnreLoteRecepcao"
+_DEFAULT_HOMOL_RESULT = "https://www.testegnre.pe.gov.br/gnreWS/services/GnreResultadoLote"
 
-_WS_LOTE   = (os.getenv("GNRE_WS_URL_PROD", _DEFAULT_PROD_LOTE)
+# `or` em vez de default do getenv: variável presente porém vazia no .env usa o padrão
+_WS_LOTE   = ((os.getenv("GNRE_WS_URL_PROD") or _DEFAULT_PROD_LOTE)
               if _TP_AMB == "1"
-              else os.getenv("GNRE_WS_URL_HOMOLOG", _DEFAULT_HOMOL_LOTE))
-_WS_RESULT = (os.getenv("GNRE_WS_URL_PROD_RESULT", _DEFAULT_PROD_RESULT)
+              else (os.getenv("GNRE_WS_URL_HOMOLOG") or _DEFAULT_HOMOL_LOTE))
+_WS_RESULT = ((os.getenv("GNRE_WS_URL_PROD_RESULT") or _DEFAULT_PROD_RESULT)
               if _TP_AMB == "1"
-              else os.getenv("GNRE_WS_URL_HOMOLOG_RESULT", _DEFAULT_HOMOL_RESULT))
+              else (os.getenv("GNRE_WS_URL_HOMOLOG_RESULT") or _DEFAULT_HOMOL_RESULT))
 
 
 def _cert_configured() -> bool:
@@ -98,42 +106,141 @@ def _obs_text(dados: NFeDados, max_len: int = 60) -> str:
     return full[:max_len]
 
 
+def _sem_acento(s: str) -> str:
+    import unicodedata
+    return "".join(c for c in unicodedata.normalize("NFD", s or "") if unicodedata.category(c) != "Mn").lower()
+
+
+def _escolher_opcao(opcoes: list[dict], preferidas: tuple[str, ...]) -> str | None:
+    """Escolhe o código cuja descrição contém um dos termos preferidos (em ordem); senão o único disponível."""
+    for termo in preferidas:
+        for o in opcoes:
+            if termo in _sem_acento(o["descricao"]).replace(" ", ""):
+                return o["codigo"]
+    return opcoes[0]["codigo"] if len(opcoes) == 1 else None
+
+
+def _valor_campo_extra(ce: dict, dados: NFeDados, emi_date: date, data_pag: date) -> str:
+    """Preenche um campo extra pelo título que a UF configurou no GnreConfigUF."""
+    titulo = _sem_acento(ce["titulo"])
+    chave = _digits(dados.chave_nfe or "")
+    if ce["tipo"] == "D":
+        return (data_pag if "venc" in titulo else emi_date).strftime("%Y-%m-%d")
+    if "chave" in titulo:
+        # campo só de CT-e (sem "nfe" no título): preenche apenas se obrigatório
+        if "nfe" not in titulo.replace("-", "") and not ce["obrigatorio"]:
+            return ""
+        return chave
+    if ce["tipo"] == "N":
+        return _digits(dados.n_nf) if ("nota" in titulo or "numero" in titulo) else ""
+    if any(t in titulo for t in ("obs", "informa", "complement", "identifica")) or ce["obrigatorio"]:
+        return _obs_text(dados, max_len=ce["tamanho"] or 100)
+    return ""
+
+
 def _build_gnre_xml(
     dados: NFeDados,
     receita: str,
     valor: Decimal,
     data_pag: date,
     fecp_valor: Decimal | None = None,
+    cfg: dict | None = None,
 ) -> str:
     """
-    Monta XML TLote_GNRE versao="2.00" usando configuração por UF (UF_DIFAL_CONFIG).
+    Monta XML TLote_GNRE versao="2.00".
 
-    Para cada UF aplica automaticamente:
-    - tipo e valor correto de documentoOrigem (varia por UF)
-    - campos extras obrigatórios (chave NF-e, data emissão, etc.)
-    - campo convenio (onde exigido) com número NF-e para identificação
-    - referência/período (onde exigido)
-    - contribuinteDestinatario (onde exigido)
-    - valor tipo="12" FCP (para RJ, RO, RS, SE que têm fecp_mesmo_guia)
+    cfg: regras da receita na UF obtidas do GnreConfigUF (gnre_config.obter_config).
+         Sem cfg (sem certificado / portal indisponível) usa a tabela estática UF_DIFAL_CONFIG.
+    dados.opcoes_gnre pode sobrescrever: detalhamento_receita, produto, convenio, campos_extras.
+
+    Ordem dos elementos de <item> conforme dados_gnre_v2.00.xsd:
+      receita, detalhamentoReceita, documentoOrigem, produto, referencia,
+      dataVencimento, valor, convenio, contribuinteDestinatario, camposExtras
     """
-    from uf_config import UF_DIFAL_CONFIG
-
     emit = dados.emitente
     dest = dados.destinatario
     dest_uf = dados.uf_dest.upper()
     emi_date = _parse_date(dados.dh_emi) or date.today()
     end = emit.endereco
     chave = _digits(dados.chave_nfe or "")
-    n_nf = dados.n_nf or ""
+    n_nf = _digits(dados.n_nf or "")
+    opc = dados.opcoes_gnre or {}
+    eh_fcp = receita == "100129"
 
-    uf_cfg: dict = UF_DIFAL_CONFIG.get(dest_uf) or {}
-    tipo_doc: str | None = uf_cfg.get("tipo_doc")
-    doc_valor_tipo: str | None = uf_cfg.get("doc_valor")  # "chave" ou "n_nf"
-    exige_dest: bool = uf_cfg.get("exige_dest", True)
-    exige_periodo: bool = uf_cfg.get("exige_periodo", False)
-    convenio_cfg = uf_cfg.get("convenio", False)  # False | True | "O"
-    campos_cfg: list[dict] = uf_cfg.get("campos_extras", [])
-    fecp_mesmo_guia: bool = uf_cfg.get("fecp_mesmo_guia", False)
+    detalhamento = produto = periodo = parcela = None
+    if cfg:
+        # ── Regras dinâmicas (GnreConfigUF) ──────────────────────────────────
+        tipo_doc = doc_val = None
+        if cfg["exige_doc_origem"]:
+            tipos = cfg["tipos_doc_origem"]
+            # 24 = chave DF-e, 22 = chave NF-e → chave de 44 dígitos; 10 = nota fiscal → número
+            for t in ("24", "22"):
+                if t in tipos and chave:
+                    tipo_doc, doc_val = t, chave
+                    break
+            else:
+                if n_nf and tipos:
+                    tipo_doc, doc_val = ("10" if "10" in tipos else tipos[0]), n_nf
+        exige_periodo = cfg["exige_referencia"]
+        if cfg["exige_apuracao"]:
+            periodo = "0" if "0" in cfg["apuracoes"] or not cfg["apuracoes"] else cfg["apuracoes"][0]
+        if cfg["exige_parcela"]:
+            parcela = "1"
+        if cfg["exige_detalhamento"]:
+            detalhamento = opc.get("detalhamento_receita") or _escolher_opcao(
+                cfg["detalhamentos"],
+                ("difal", "ec87", "fecoep", "combate", "pobreza") if eh_fcp else ("difal", "ec87", "consumidorfinal"),
+            )
+            if not detalhamento:
+                raise ValueError(
+                    f"{dest_uf} exige detalhamento da receita {receita}. Informe 'detalhamento_receita' com um destes "
+                    f"códigos: {', '.join(d['codigo'] + ' (' + d['descricao'] + ')' for d in cfg['detalhamentos'])}"
+                )
+        if cfg["exige_produto"]:
+            produto = opc.get("produto") or _escolher_opcao(cfg["produtos"], ("comerciooutros", "outros"))
+            if not produto:
+                raise ValueError(
+                    f"{dest_uf} exige o produto na receita {receita}. Informe 'produto' com um dos códigos de "
+                    f"GET /api/gnre/config/{dest_uf}/{receita}."
+                )
+        exige_dest = cfg["exige_destinatario"]
+        convenio = opc.get("convenio") or (f"NF-e {n_nf}"[:30] if cfg["convenio"] == "O" and n_nf else None)
+        fecp_mesmo_guia = cfg["exige_valor_fecp"]
+        tipo_valor = "21" if cfg["valor_exigido"].startswith("T") else "11"
+        campos_preenchidos = []
+        for ce in cfg["campos_extras"]:
+            val = (opc.get("campos_extras") or {}).get(ce["codigo"]) or _valor_campo_extra(ce, dados, emi_date, data_pag)
+            if val:
+                campos_preenchidos.append((ce["codigo"], str(val)[: ce["tamanho"] or 100]))
+            elif ce["obrigatorio"]:
+                raise ValueError(
+                    f"{dest_uf} exige o campo extra {ce['codigo']} '{ce['titulo']}'. "
+                    f"Informe em campos_extras: {{\"{ce['codigo']}\": \"valor\"}}"
+                )
+    else:
+        # ── Reserva: tabela estática (uf_config.py) ──────────────────────────
+        from uf_config import UF_DIFAL_CONFIG
+
+        uf_cfg: dict = UF_DIFAL_CONFIG.get(dest_uf) or {}
+        tipo_doc = uf_cfg.get("tipo_doc")
+        doc_val = (chave if uf_cfg.get("doc_valor") == "chave" else n_nf) if tipo_doc else None
+        exige_periodo = uf_cfg.get("exige_periodo", False)
+        if exige_periodo:
+            periodo = "0"
+        exige_dest = uf_cfg.get("exige_dest", True)
+        convenio = opc.get("convenio") or (f"NF-e {n_nf}"[:29] if uf_cfg.get("convenio") and n_nf else None)
+        fecp_mesmo_guia = uf_cfg.get("fecp_mesmo_guia", False)
+        tipo_valor = "11"
+        campos_preenchidos = []
+        for ce in uf_cfg.get("campos_extras", []):
+            if ce["valor"] == "chave":
+                val = chave[:44]
+            elif ce["valor"] == "data_emi":
+                val = emi_date.strftime("%Y-%m-%d")
+            else:
+                val = _obs_text(dados, max_len=100)
+            if val or ce["obrig"]:
+                campos_preenchidos.append((ce["codigo"], val))
 
     root = etree.Element("TLote_GNRE", versao="2.00", xmlns=_GNRE_NS)
     guias = _el(root, "guias")
@@ -148,9 +255,8 @@ def _build_gnre_xml(
     _el(ident, "CNPJ", _digits(emit.cnpj))
     # IE NÃO é enviada: a IE do emitente é do estado de origem (RS, SP, etc.),
     # não da UF favorecida. Enviar causa erro 700 "INSCRICAO ESTADUAL NAO CADASTRADA".
-    # Para DIFAL, o emitente usa apenas CNPJ na identificação.
-    _el(emit_el, "razaoSocial", emit.razao_social[:60])
-    addr_parts = [p for p in [end.logradouro, end.numero, end.bairro] if p]
+    _el(emit_el, "razaoSocial", emit.razao_social.strip()[:60])
+    addr_parts = [p.strip() for p in [end.logradouro, end.numero, end.bairro] if p and p.strip()]
     _el(emit_el, "endereco", " ".join(addr_parts)[:60] if addr_parts else "")
     mun_cod = _municipio_5dig(end.municipio_codigo)
     if mun_cod:
@@ -160,69 +266,44 @@ def _build_gnre_xml(
         _el(emit_el, "cep", _digits(end.cep))
 
     # ── Item ──────────────────────────────────────────────────────────────────
-    itens_el = _el(guide, "itensGNRE")
-    item = _el(itens_el, "item")
+    item = _el(_el(guide, "itensGNRE"), "item")
     _el(item, "receita", receita)
-
-    # documentoOrigem — tipo e valor dependem da UF
-    if tipo_doc and (chave or n_nf):
-        doc_val = chave if doc_valor_tipo == "chave" else n_nf
-        if doc_val:
-            _el(item, "documentoOrigem", doc_val, tipo=tipo_doc)
-
-    # Referência/período — apenas onde exigido
+    if detalhamento:
+        _el(item, "detalhamentoReceita", detalhamento)
+    if tipo_doc and doc_val:
+        _el(item, "documentoOrigem", doc_val, tipo=tipo_doc)
+    if produto:
+        _el(item, "produto", produto)
     if exige_periodo:
         ref = _el(item, "referencia")
-        _el(ref, "periodo", "0")  # 0 = mensal
+        if periodo is not None:
+            _el(ref, "periodo", periodo)
         _el(ref, "mes", f"{emi_date.month:02d}")
         _el(ref, "ano", str(emi_date.year))
+        if parcela:
+            _el(ref, "parcela", parcela)
 
     _el(item, "dataVencimento", data_pag.strftime("%Y-%m-%d"))
-    _el(item, "valor", f"{valor:.2f}", tipo="11")
-
-    # FCP no mesmo guia (RJ, RO, RS, SE)
+    _el(item, "valor", f"{valor:.2f}", tipo=tipo_valor)
+    # FCP no mesmo guia (UFs com exigeValorFecp=S): valor tipo 12 (principal FCP) / 22 (total FCP)
     if fecp_mesmo_guia and fecp_valor and fecp_valor > Decimal("0"):
-        _el(item, "valor", f"{fecp_valor:.2f}", tipo="12")
+        _el(item, "valor", f"{fecp_valor:.2f}", tipo="22" if tipo_valor == "21" else "12")
 
-    # Convênio — observação com NF-e número (max 30 chars, validação 114)
-    # Ordem correta conforme manual do portal: valor → convenio → dest → camposExtras
-    if convenio_cfg:  # True ou "O" (opcional)
-        conv_txt = f"NF-e {n_nf}"[:29] if n_nf else ""
-        if conv_txt:
-            _el(item, "convenio", conv_txt)
+    if convenio:
+        _el(item, "convenio", convenio.strip()[:30])
 
-    # Destinatário — onde exigido OU quando temos os dados
     if (exige_dest or dest.cnpj or dest.cpf) and (dest.cnpj or dest.cpf):
         dest_el = _el(item, "contribuinteDestinatario")
         dest_ident = _el(dest_el, "identificacao")
         if dest.cnpj:
             _el(dest_ident, "CNPJ", _digits(dest.cnpj))
-        elif dest.cpf:
+        else:
             _el(dest_ident, "CPF", _digits(dest.cpf))
         if dest.nome:
-            _el(dest_el, "razaoSocial", dest.nome[:60])
+            _el(dest_el, "razaoSocial", dest.nome.strip()[:60])
         dest_mun = _municipio_5dig(dest.municipio_codigo)
         if dest_mun:
             _el(dest_el, "municipio", dest_mun)
-
-    # Campos extras — preenchidos automaticamente a partir dos dados da NF-e
-    campos_preenchidos: list[tuple[str, str]] = []
-    for ce in campos_cfg:
-        cod = ce["codigo"]
-        val_tipo = ce["valor"]
-        obrig = ce["obrig"]
-
-        if val_tipo == "chave":
-            val = chave[:44]
-        elif val_tipo == "data_emi":
-            val = emi_date.strftime("%Y-%m-%d")
-        elif val_tipo == "obs":
-            val = _obs_text(dados, max_len=100)
-        else:
-            val = ""
-
-        if val or obrig:
-            campos_preenchidos.append((cod, val))
 
     if campos_preenchidos:
         extras_el = _el(item, "camposExtras")
@@ -468,7 +549,7 @@ def _parse_resultado(soap_text: str) -> dict:
     barcode = _find(root, "codigoBarras")
     linha = _find(root, "linhaDigitavel")
     qrcode = _find(root, "qrcodePayload")
-    numero_guia = _find(root, "numeroGuia") or None
+    numero_guia = _find(root, "nossoNumero") or None
     # Log temporário: lista todos os campos da resposta para diagnosticar PIX
     logger.info("GNRE resposta campos: %s", [el.tag.split('}')[-1] for el in root.iter() if el.text and el.text.strip()])
     # Motivo de rejeição específico (dentro de motivosRejeicao)
@@ -502,6 +583,9 @@ def _parse_resultado(soap_text: str) -> dict:
                 "numero_guia": numero_guia,
                 "mensagem": descricao,
             }
+        # situacaoGuia=4: pendência de tempo de processamento (até 1h, Quadro IV)
+        if situacao_guia == "4":
+            return {"status": "processando", "mensagem": descricao}
         return {
             "status": "erro",
             "mensagem": motivo_rej or f"Processado com pendência: {descricao}",
@@ -525,7 +609,7 @@ def _call_webservice(gnre_xml: str, cert: tuple[str, str] | None) -> dict:
     logger.info("GNRE lote aceito, recibo=%s", numero_recibo)
 
     # Manual exige mínimo 30s de espera antes de consultar (seção 4.2.3)
-    espera_inicial = 30 if _TP_AMB == "1" else 5
+    espera_inicial = 30
     logger.info("Aguardando %ds antes de consultar resultado...", espera_inicial)
     time.sleep(espera_inicial)
 
@@ -537,6 +621,7 @@ def _call_webservice(gnre_xml: str, cert: tuple[str, str] | None) -> dict:
             time.sleep(10)
         resp_result = _post_soap(_WS_RESULT, soap_consul, cert, soap_action=_SOAP_ACTION_RESULT)
         result = _parse_resultado(resp_result)
+        result["numero_recibo"] = numero_recibo
         if result.get("status") != "processando":
             return result
         logger.info("GNRE ainda processando (tentativa %d/6)...", tentativa + 1)
@@ -551,6 +636,14 @@ def _call_webservice(gnre_xml: str, cert: tuple[str, str] | None) -> dict:
     }
 
 
+def consultar_recibo(numero_recibo: str, cert: tuple[str, str]) -> dict:
+    """Consulta novamente um lote já enviado (guias que ficaram 'processando')."""
+    soap = _build_soap_consulta(_build_consulta_xml(numero_recibo))
+    result = _parse_resultado(_post_soap(_WS_RESULT, soap, cert, soap_action=_SOAP_ACTION_RESULT))
+    result["numero_recibo"] = numero_recibo
+    return result
+
+
 # ── Public interface ──────────────────────────────────────────────────────────
 
 def gerar_gnre(
@@ -561,17 +654,27 @@ def gerar_gnre(
     data_pag: date | None = None,
     cert_paths: tuple[str, str] | None = None,
     fecp_valor: Decimal | None = None,
+    cfg: dict | None = None,
 ) -> GuiaGerada:
     """
     Gera uma guia GNRE via WebService.
     cert_paths: (cert.pem, key.pem) da empresa — tem prioridade sobre .env global.
-    fecp_valor: valor FCP para inclusão no mesmo guia (estados com fecp_mesmo_guia=True).
+    fecp_valor: valor FCP para inclusão no mesmo guia (UFs com exigeValorFecp=S).
+    cfg: regras da UF/receita (gnre_config.obter_config); None usa a tabela estática.
     Sem certificado: retorna XML para download manual (status pendente_webservice).
     """
     from datetime import date as _date
     data_pag = data_pag or _date.today()
 
-    xml_str = _build_gnre_xml(dados, receita, valor, data_pag, fecp_valor=fecp_valor)
+    try:
+        xml_str = _build_gnre_xml(dados, receita, valor, data_pag, fecp_valor=fecp_valor, cfg=cfg)
+    except ValueError as exc:
+        # Falta informação que a UF exige (detalhamento, produto, campo extra...)
+        return GuiaGerada(
+            tipo="GNRE", uf=dados.uf_dest, receita_codigo=receita, receita_descricao=descricao,
+            valor=valor, data_vencimento=data_pag.strftime("%d/%m/%Y"),
+            status="erro", mensagem=str(exc),
+        )
     effective_cert = cert_paths or ((_CERT, _KEY) if _cert_configured() else None)
 
     if effective_cert:
@@ -588,6 +691,7 @@ def gerar_gnre(
                 linha_digitavel=ws_result.get("linha_digitavel"),
                 qrcode_pix=ws_result.get("qrcode_pix"),
                 numero_guia=ws_result.get("numero_guia"),
+                numero_recibo=ws_result.get("numero_recibo"),
                 gnre_xml=xml_str,
                 status=ws_result.get("status", "erro"),
                 mensagem=ws_result.get("mensagem"),

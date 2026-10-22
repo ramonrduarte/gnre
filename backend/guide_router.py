@@ -8,6 +8,9 @@ When a CNPJ emit is registered in the DB:
   - Emitente address is auto-filled from the empresa record
   - The empresa's A1 certificate is used for all WebService calls
 """
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from datetime import date
 from decimal import Decimal
 
@@ -16,6 +19,7 @@ from sqlalchemy.orm import Session
 from models import NFeDados, ResultadoGuias, GuiaGerada
 from uf_config import UF_GNRE_CODES, UF_DIFAL_CONFIG, uf_usa_gnre
 from gnre_service import gerar_gnre
+from gnre_config import obter_config
 from dare_sp_service import gerar_dare_sp
 from dare_es_service import gerar_dua_es
 from difal_calculator import build_calculo_from_nfe
@@ -75,6 +79,90 @@ def _enrich_from_empresa(dados: NFeDados, db: Session) -> tuple[NFeDados, tuple 
     return dados, cert_paths
 
 
+_RECEITA_DIFAL = "100102"   # ICMS Consumidor Final Não Contribuinte Outra UF por Operação
+_RECEITA_FCP = "100129"     # ICMS Fundo Estadual de Combate à Pobreza por Operação
+
+
+def _gerar_gnres(
+    dados: NFeDados,
+    uf_dest: str,
+    difal_val: Decimal,
+    fecp_val: Decimal,
+    data_pag: date,
+    cert_paths: tuple | None,
+) -> list[GuiaGerada]:
+    """
+    Gera as guias GNRE da UF usando as regras do GnreConfigUF:
+      - exigeValorFecp=S na receita DIFAL → FCP vai no mesmo guia (valor tipo 12)
+      - senão, FCP em guia separada na receita 100129, se a UF tiver essa receita
+    Sem acesso ao GnreConfigUF (sem certificado), usa a tabela estática de uf_config.
+    """
+    from gnre_service import _CERT, _KEY, _cert_configured
+
+    cert = cert_paths or ((_CERT, _KEY) if _cert_configured() else None)
+    cfg_difal = obter_config(uf_dest, _RECEITA_DIFAL, cert)
+    guias: list[GuiaGerada] = []
+
+    if cfg_difal is not None and not cfg_difal["existe"]:
+        return [GuiaGerada(
+            tipo="GNRE", uf=uf_dest, receita_codigo=_RECEITA_DIFAL,
+            receita_descricao=f"ICMS DIFAL EC 87/2015 – {uf_dest}", valor=difal_val,
+            status="erro", mensagem=f"UF {uf_dest} não emite a receita {_RECEITA_DIFAL} pelo GNRE: {cfg_difal['descricao']}",
+        )]
+
+    if cfg_difal is not None:
+        fecp_mesmo_guia = cfg_difal["exige_valor_fecp"]
+    else:
+        fecp_mesmo_guia = (UF_DIFAL_CONFIG.get(uf_dest) or {}).get("fecp_mesmo_guia", False)
+
+    # Cada guia espera ≥30s pelo resultado no portal: DIFAL e FCP rodam em paralelo
+    jobs: list = []
+    if difal_val > Decimal("0"):
+        jobs.append(partial(
+            gerar_gnre,
+            dados,
+            receita=_RECEITA_DIFAL,
+            descricao=f"ICMS DIFAL EC 87/2015 – {uf_dest}",
+            valor=difal_val,
+            data_pag=data_pag,
+            cert_paths=cert_paths,
+            fecp_valor=fecp_val if fecp_mesmo_guia else None,
+            cfg=cfg_difal,
+        ))
+
+    if fecp_val > Decimal("0") and not fecp_mesmo_guia:
+        if cfg_difal is not None:
+            cfg_fcp = obter_config(uf_dest, _RECEITA_FCP, cert)
+            tem_fcp = cfg_fcp is None or cfg_fcp["existe"]
+        else:
+            cfg_fcp = None
+            tem_fcp = bool(UF_GNRE_CODES.get(uf_dest, {}).get("fecp"))
+        if tem_fcp:
+            jobs.append(partial(
+                gerar_gnre,
+                dados,
+                receita=_RECEITA_FCP,
+                descricao=f"ICMS FCP Consumidor Final – {uf_dest}",
+                valor=fecp_val,
+                data_pag=data_pag,
+                cert_paths=cert_paths,
+                cfg=cfg_fcp,
+            ))
+        else:
+            guias.append(GuiaGerada(
+                tipo="GNRE", uf=uf_dest, receita_codigo=_RECEITA_FCP,
+                receita_descricao=f"ICMS FCP Consumidor Final – {uf_dest}", valor=fecp_val,
+                status="erro",
+                mensagem=f"UF {uf_dest} não possui a receita FCP {_RECEITA_FCP} no GNRE nem aceita FCP na guia do DIFAL. "
+                         "Confirme se há FCP devido para essa UF.",
+            ))
+
+    if jobs:
+        with ThreadPoolExecutor(max_workers=len(jobs)) as ex:
+            guias = [f.result() for f in [ex.submit(j) for j in jobs]] + guias
+    return guias
+
+
 async def gerar_guias_completo(dados: NFeDados, db: Session | None = None) -> ResultadoGuias:
     """
     Main routing function. Looks up empresa in DB to enrich emitente data
@@ -95,42 +183,13 @@ async def gerar_guias_completo(dados: NFeDados, db: Session | None = None) -> Re
     guias: list[GuiaGerada] = []
 
     if uf_usa_gnre(uf_dest):
-        codes = UF_GNRE_CODES.get(uf_dest, {"difal": "100102", "fecp": None})
-        uf_cfg = UF_DIFAL_CONFIG.get(uf_dest) or {}
-        fecp_mesmo_guia: bool = uf_cfg.get("fecp_mesmo_guia", False)
-
-        if difal_val > Decimal("0") and codes["difal"]:
-            # Para UFs com fecp_mesmo_guia (RJ, RO, RS, SE), o FCP vai dentro do
-            # próprio guia DIFAL como valor tipo="12" — sem guia separada.
-            fecp_para_difal = fecp_val if fecp_mesmo_guia else None
-            guia_difal = gerar_gnre(
-                dados,
-                receita=codes["difal"],
-                descricao=f"ICMS DIFAL EC 87/2015 – {uf_dest}",
-                valor=difal_val,
-                data_pag=data_pag,
-                cert_paths=cert_paths,
-                fecp_valor=fecp_para_difal,
-            )
-            guias.append(guia_difal)
-
-        # Guia FCP separada apenas para estados sem fecp_mesmo_guia
-        if fecp_val > Decimal("0") and codes.get("fecp") and not fecp_mesmo_guia:
-            guia_fecp = gerar_gnre(
-                dados,
-                receita=codes["fecp"],
-                descricao=f"ICMS FCP Consumidor Final – {uf_dest}",
-                valor=fecp_val,
-                data_pag=data_pag,
-                cert_paths=cert_paths,
-            )
-            guias.append(guia_fecp)
-
+        guias = await asyncio.to_thread(_gerar_gnres, dados, uf_dest, difal_val, fecp_val, data_pag, cert_paths)
         portal_url = _PORTAL_GNRE
     elif uf_dest == "ES":
         # ES usa DUA-e via WebService próprio (não GNRE nacional)
         if difal_val > Decimal("0"):
-            guia_es = gerar_dua_es(
+            guia_es = await asyncio.to_thread(
+                gerar_dua_es,
                 dados,
                 receita="3867",
                 descricao="ICMS Diferencial de Alíquota EC 87/2015 – ES (DUA-e)",

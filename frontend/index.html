@@ -147,6 +147,10 @@
     box-shadow: 0 1px 3px rgba(0,0,0,.05);
   }
   .card h2 { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: var(--gray-700); }
+  .api-fields { width: 100%; border-collapse: collapse; font-size: .8rem; }
+  .api-fields th, .api-fields td { text-align: left; padding: .4rem .6rem; border-bottom: 1px solid var(--gray-200); vertical-align: top; }
+  .api-fields th { color: var(--gray-600); font-weight: 600; background: var(--gray-50); }
+  .api-fields td:first-child { font-family: ui-monospace, monospace; white-space: nowrap; }
 
   /* Form elements */
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .75rem; }
@@ -596,7 +600,39 @@
       <div style="margin-top:1rem;font-size:.8rem;color:var(--gray-600)">
         <strong>Documentação da API:</strong>
         <a href="/docs" target="_blank" style="color:var(--blue)">Swagger UI (/docs)</a> ·
-        <a href="/redoc" target="_blank" style="color:var(--blue)">ReDoc (/redoc)</a>
+        <a href="/redoc" target="_blank" style="color:var(--blue)">ReDoc (/redoc)</a> ·
+        guia completo em <code>docs/API.md</code> no repositório
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Campos do JSON</h2>
+      <p style="font-size:.8rem;color:var(--gray-600);margin-bottom:.75rem">
+        Uma NF-e por requisição. Se o CNPJ emitente estiver cadastrado em <strong>Empresas</strong>,
+        o endereço e o certificado A1 vêm do cadastro. O sistema consulta as regras de cada UF no portal GNRE
+        e preenche sozinho documento de origem, referência e campos extras.
+      </p>
+      <div style="overflow-x:auto">
+        <table class="api-fields">
+          <thead><tr><th>Campo</th><th>Obrigatório</th><th>Descrição</th></tr></thead>
+          <tbody>
+            <tr><td>cnpj_emit</td><td>Sim</td><td>CNPJ do emitente (só dígitos)</td></tr>
+            <tr><td>razao_social_emit</td><td>Sim</td><td>Razão social do emitente</td></tr>
+            <tr><td>uf_emit</td><td>Sim</td><td>UF do emitente (ex: RS)</td></tr>
+            <tr><td>cpf_dest / cnpj_dest</td><td>Sim (um dos dois)</td><td>Documento do consumidor final</td></tr>
+            <tr><td>nome_dest</td><td>Sim</td><td>Nome do destinatário</td></tr>
+            <tr><td>uf_dest</td><td>Sim</td><td>UF que recebe o DIFAL (SP → DARE, ES → DUA-e, demais → GNRE)</td></tr>
+            <tr><td>chave_nfe</td><td>Na prática, sim</td><td>Chave de 44 dígitos — exigida pela maioria das UFs</td></tr>
+            <tr><td>n_nf</td><td>Na prática, sim</td><td>Número da NF-e</td></tr>
+            <tr><td>dh_emi</td><td>Recomendado</td><td>Data de emissão — define mês/ano de referência</td></tr>
+            <tr><td>v_difal</td><td>Sim*</td><td>Valor do DIFAL da NF-e (vICMSUFDest)</td></tr>
+            <tr><td>v_fcp</td><td>Não</td><td>Valor do FCP da NF-e (vFCPUFDest)</td></tr>
+            <tr><td>v_bc_difal</td><td>Sim*</td><td>*Alternativa a v_difal: base para o sistema calcular</td></tr>
+            <tr><td>municipio_codigo_dest</td><td>Recomendado</td><td>Código IBGE (7 dígitos) do município de destino</td></tr>
+            <tr><td>data_pagamento</td><td>Não</td><td>AAAA-MM-DD. Padrão: próximo dia útil</td></tr>
+            <tr><td>detalhamento_receita, produto, convenio, campos_extras</td><td>Não</td><td>Só quando a UF exigir algo fora do padrão (ver <code>GET /api/gnre/config/{uf}/{receita}</code>)</td></tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </div>
@@ -835,25 +871,23 @@ function limparManual() {
 
 // ── JSON API Tab ───────────────────────────────────────────────────────────────
 function loadJsonExample() {
+  // Formato recomendado para integração com ERP: valores DIFAL/FCP já calculados na NF-e
   const example = {
-    cnpj_emit: "12345678000195",
-    razao_social_emit: "Empresa Vendedora Ltda",
-    uf_emit: "SP",
-    municipio_codigo_emit: "3550308",
-    cep_emit: "01310100",
-    logradouro_emit: "Av. Paulista",
-    numero_emit: "1000",
-    nome_dest: "Comprador Rio Ltda",
-    cnpj_dest: "98765432000100",
-    uf_dest: "RJ",
-    municipio_codigo_dest: "3304557",
-    chave_nfe: "35240612345678000195550010000001231000012345",
-    n_nf: "123",
+    cnpj_emit: "92613413000160",
+    razao_social_emit: "CASA DAS FECHADURAS ADROFECHA LTDA",
+    uf_emit: "RS",
+    cpf_dest: "12345678909",
+    nome_dest: "JOAO DA SILVA",
+    uf_dest: "MG",
+    municipio_codigo_dest: "3106200",
+    chave_nfe: "43261092613413000160550010000123451000123459",
+    n_nf: "12345",
     serie: "1",
     dh_emi: new Date().toISOString().slice(0, 10),
-    v_bc_difal: 1000.00,
+    v_difal: 60.00,
+    v_fcp: 20.00,
     data_pagamento: (() => {
-      const d = new Date(); d.setDate(d.getDate() + 3); return d.toISOString().slice(0, 10);
+      const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10);
     })()
   };
   document.getElementById('json-body').value = JSON.stringify(example, null, 2);
@@ -875,6 +909,35 @@ async function gerarPorJSON() {
 }
 
 // ── Shared API call ────────────────────────────────────────────────────────────
+function apiErro(data) {
+  // 422 do FastAPI: detail é uma lista [{loc, msg}]
+  if (Array.isArray(data.detail)) {
+    return data.detail.map(d => {
+      const campo = (d.loc || []).filter(p => p !== 'body').join('.');
+      return (campo ? campo + ': ' : '') + String(d.msg).replace(/^Value error, /, '');
+    }).join(' | ');
+  }
+  return data.detail || JSON.stringify(data);
+}
+
+async function reconsultarRecibo(recibo, btn) {
+  setLoading(btn, true);
+  try {
+    const res = await fetch(`/api/gnre/resultado/${recibo}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(apiErro(data));
+    if (data.status === 'gerada') {
+      showToast(`Guia gerada · linha digitável ${data.linha_digitavel || data.codigo_barras}`);
+    } else {
+      showToast(`${data.status}: ${data.mensagem || ''}`, data.status === 'erro' ? 'error' : 'info');
+    }
+  } catch (e) {
+    showToast('Erro: ' + e.message, 'error');
+  } finally {
+    setLoading(btn, false);
+  }
+}
+
 async function callAPI(url, body) {
   const btn = event?.target?.closest('.btn') || document.querySelector('.btn-primary');
   setLoading(btn, true);
@@ -885,7 +948,7 @@ async function callAPI(url, body) {
       body: JSON.stringify(body),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+    if (!res.ok) throw new Error(apiErro(data));
     renderResults(data);
   } catch (e) {
     showToast('Erro: ' + e.message, 'error');
@@ -908,13 +971,17 @@ function renderResults(data) {
   // Calculation summary
   const calc = data.calculo;
   const cg = document.getElementById('calculo-grid');
+  // Base 0 = valores DIFAL/FCP informados prontos (v_difal/v_fcp): alíquotas não se aplicam
+  const temBase = Number(calc.v_bc) > 0;
   cg.innerHTML = `
+    ${temBase ? `
     <div class="calculo-item"><label>Base de Cálculo</label><div class="value">${fmt(calc.v_bc)}</div></div>
     <div class="calculo-item"><label>Alíq. Interna</label><div class="value">${calc.p_aliq_interna}%</div></div>
     <div class="calculo-item"><label>Alíq. Interestadual</label><div class="value">${calc.p_aliq_inter}%</div></div>
-    <div class="calculo-item"><label>FECP</label><div class="value">${calc.p_fecp}%</div></div>
+    <div class="calculo-item"><label>FECP</label><div class="value">${calc.p_fecp}%</div></div>`
+    : `<div class="calculo-item"><label>Origem dos valores</label><div class="value">Informados na NF-e</div></div>`}
     <div class="calculo-item"><label>DIFAL</label><div class="value money">${fmt(calc.v_difal)}</div></div>
-    ${calc.p_fecp > 0 ? `<div class="calculo-item"><label>FCP/FECP</label><div class="value money">${fmt(calc.v_fecp)}</div></div>` : ''}
+    ${Number(calc.v_fecp) > 0 ? `<div class="calculo-item"><label>FCP/FECP</label><div class="value money">${fmt(calc.v_fecp)}</div></div>` : ''}
     <div class="calculo-item"><label>Total a Recolher</label><div class="value total">${fmt(calc.v_total)}</div></div>
   `;
 
@@ -939,6 +1006,7 @@ function buildGuideCard(g, idx) {
   const statusBadge = {
     gerada: '<span class="guide-badge badge-gerada">✓ Gerada</span>',
     pendente_webservice: '<span class="guide-badge badge-pendente">⏳ Pendente</span>',
+    processando: '<span class="guide-badge badge-pendente">⏳ Processando na UF</span>',
     erro: '<span class="guide-badge badge-erro">✗ Erro</span>',
   }[g.status] || '';
 
@@ -960,8 +1028,9 @@ function buildGuideCard(g, idx) {
       </div>
       ${g.linha_digitavel ? `<div class="barcode-line" title="Clique para copiar" onclick="copyText('${g.linha_digitavel}')">📋 ${g.linha_digitavel}</div>` : ''}
       ${g.codigo_barras ? `<div class="barcode-line" style="font-size:.7rem">Cód. barras: ${g.codigo_barras}</div>` : ''}
-      ${g.mensagem ? `<div class="alert ${g.status === 'erro' ? 'alert-error' : g.status === 'pendente_webservice' ? 'alert-warning' : 'alert-info'}">${g.mensagem}</div>` : ''}
+      ${g.mensagem ? `<div class="alert ${g.status === 'erro' ? 'alert-error' : ['pendente_webservice', 'processando'].includes(g.status) ? 'alert-warning' : 'alert-info'}">${g.mensagem}</div>` : ''}
       <div class="guide-actions">
+        ${g.status === 'processando' && g.numero_recibo ? `<button class="btn btn-secondary btn-sm" onclick="reconsultarRecibo('${g.numero_recibo}', this)">🔄 Consultar recibo ${g.numero_recibo}</button>` : ''}
         ${g.gnre_xml ? `<button class="btn btn-secondary btn-sm" onclick="downloadXML(${idx})">⬇️ Baixar XML GNRE</button>` : ''}
         ${g.pdf_base64 ? `<button class="btn btn-primary btn-sm" onclick="downloadPDF(${idx})">⬇️ Baixar PDF</button>` : ''}
         ${g.codigo_barras && g.tipo === 'GNRE' ? `<button class="btn btn-primary btn-sm" onclick="printGNRE(${idx})">🖨️ Imprimir / Salvar PDF</button>` : ''}
