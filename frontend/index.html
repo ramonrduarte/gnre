@@ -364,7 +364,11 @@
     .app { grid-template-columns: minmax(0, 1fr); }
     .sidebar { position: static; height: auto; padding: .8rem; min-width: 0; }
     .brand { padding-bottom: .6rem; }
-    .nav { flex-direction: row; overflow-x: auto; gap: 4px; padding-bottom: .2rem; }
+    .nav { flex-direction: row; overflow-x: auto; gap: 4px; padding-bottom: .3rem;
+           scrollbar-width: thin; scrollbar-color: #2c3d60 transparent; }
+    .nav::-webkit-scrollbar { height: 4px; }
+    .nav::-webkit-scrollbar-thumb { background: #2c3d60; border-radius: 4px; }
+    .nav::-webkit-scrollbar-track, .nav::-webkit-scrollbar-button { display: none; background: transparent; }
     .nav-group { display: none; }
     .tab-btn { width: auto; white-space: nowrap; }
     .sidebar-foot { flex-direction: row; flex-wrap: wrap; margin-top: .6rem; }
