@@ -345,6 +345,74 @@
   .api-fields th { color: var(--muted); font-weight: 600; background: #f8fafc; font-size: .76rem; }
   .api-fields td:first-child { font-family: ui-monospace, Consolas, monospace; white-space: nowrap; color: var(--brand-dark); }
 
+  /* ── Login ─────────────────────────────────────────────────── */
+  .login-screen { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 1rem;
+                  background: radial-gradient(1200px 600px at 20% 0%, #1d3266 0%, var(--side) 55%); }
+  .login-screen[hidden] { display: none; }
+  .login-box { width: min(400px, 100%); background: #fff; border-radius: 16px; padding: 2rem 1.8rem;
+               box-shadow: 0 25px 60px rgba(0, 0, 0, .35); }
+  .login-box .brand { padding: 0 0 1.2rem; }
+  .login-box .brand strong { color: var(--text); }
+  .login-box .brand span { color: var(--muted); }
+  .login-box h1 { font-size: 1.25rem; margin-bottom: .3rem; }
+  .login-box p.sub { color: var(--muted); font-size: .86rem; margin-bottom: 1.2rem; }
+  .login-box .field { margin-bottom: .85rem; }
+  .login-box .btn { width: 100%; height: 44px; margin-top: .4rem; }
+  .login-erro { color: var(--bad); font-size: .84rem; min-height: 1.2em; margin-top: .3rem; }
+  body.sem-sessao .app { visibility: hidden; }
+
+  .user-chip { display: flex; align-items: center; gap: .55rem; background: var(--side-2); border-radius: 8px;
+               padding: .5rem .6rem; color: #dbe3f1; font-size: .8rem; }
+  .user-chip .av { width: 28px; height: 28px; border-radius: 50%; background: var(--brand); color: #fff;
+                   display: grid; place-items: center; font-weight: 700; font-size: .78rem; flex-shrink: 0; }
+  .user-chip small { display: block; color: #8798b6; font-size: .7rem; }
+  .user-chip .acoes { margin-left: auto; display: flex; gap: 2px; }
+  .user-chip button { background: transparent; border: 0; color: #9fb0cc; cursor: pointer; padding: .3rem; border-radius: 6px; display: grid; }
+  .user-chip button:hover { background: #22345a; color: #fff; }
+  body.perfil-operador [data-admin] { display: none !important; }
+
+  /* ── Modal ─────────────────────────────────────────────────── */
+  .modal-bd { position: fixed; inset: 0; background: rgba(15, 23, 42, .45); z-index: 120; display: grid; place-items: center; padding: 1rem; }
+  .modal-bd[hidden] { display: none; }
+  .modal { background: #fff; border-radius: 14px; width: min(480px, 100%); box-shadow: 0 25px 60px rgba(0, 0, 0, .3); max-height: 90vh; overflow: auto; }
+  .modal-head { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.2rem; border-bottom: 1px solid var(--line); }
+  .modal-head h2 { font-size: 1.02rem; }
+  .modal-body { padding: 1.1rem 1.2rem; }
+  .modal-body .field { margin-bottom: .8rem; }
+  .modal-foot { display: flex; justify-content: flex-end; gap: .5rem; padding: .9rem 1.2rem; border-top: 1px solid var(--line); }
+  .token-show { font-family: ui-monospace, Consolas, monospace; font-size: .85rem; background: #f6f8fb; border: 1px solid var(--line);
+                border-radius: 8px; padding: .7rem .8rem; word-break: break-all; margin: .6rem 0; }
+
+  /* ── Tabelas simples / switches ────────────────────────────── */
+  .tbl { width: 100%; border-collapse: collapse; font-size: .85rem; }
+  .tbl th { text-align: left; color: var(--muted); font-weight: 600; font-size: .76rem; padding: .55rem .7rem; background: #f8fafc; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .tbl td { padding: .65rem .7rem; border-bottom: 1px solid var(--line-2); vertical-align: middle; }
+  .tbl tr:last-child td { border-bottom: 0; }
+  .tbl .acoes { display: flex; gap: .35rem; justify-content: flex-end; }
+  .tbl-vazio { text-align: center; color: var(--muted); padding: 1.6rem !important; }
+  .switch { display: inline-flex; align-items: center; gap: .6rem; cursor: pointer; font-weight: 600; font-size: .9rem; color: var(--text); }
+  .switch input { display: none; }
+  .switch .trilho { width: 40px; height: 22px; border-radius: 999px; background: #cbd5e1; position: relative; transition: background .15s; flex-shrink: 0; }
+  .switch .trilho::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+  .switch input:checked + .trilho { background: var(--ok); }
+  .switch input:checked + .trilho::after { transform: translateX(18px); }
+  .dias { display: flex; gap: .4rem; flex-wrap: wrap; }
+  .dias label { cursor: pointer; }
+  .dias input { display: none; }
+  .dias span { display: inline-grid; place-items: center; min-width: 44px; height: 36px; padding: 0 .6rem; border-radius: 8px;
+               border: 1px solid #cfd7e3; font-size: .82rem; font-weight: 600; color: var(--muted); background: #fff; }
+  .dias input:checked + span { background: var(--brand); border-color: var(--brand); color: #fff; }
+  .horarios { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center; }
+  .horario { display: inline-flex; align-items: center; gap: .3rem; background: var(--brand-soft); color: var(--brand-dark);
+             border-radius: 999px; padding: .25rem .4rem .25rem .7rem; font-weight: 700; font-size: .83rem; }
+  .horario button { border: 0; background: transparent; color: inherit; cursor: pointer; display: grid; padding: .1rem; border-radius: 50%; }
+  .horario button:hover { background: rgba(37, 87, 214, .15); }
+  .info-box { display: flex; gap: .6rem; align-items: flex-start; background: #f8fafc; border: 1px solid var(--line); border-radius: 10px; padding: .75rem .9rem; font-size: .84rem; color: #334155; }
+  .info-box.ok { background: var(--ok-bg); border-color: #bfe5c9; color: #14532d; }
+  .info-box.bad { background: var(--bad-bg); border-color: #f4caca; color: #7f1d1d; }
+  .grid-2c { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; }
+  @media (max-width: 980px) { .grid-2c { grid-template-columns: 1fr; } }
+
   /* ── Toast ─────────────────────────────────────────────────── */
   .toast {
     position: fixed; bottom: 1.4rem; right: 1.4rem; max-width: min(440px, calc(100vw - 2rem));
@@ -384,7 +452,7 @@
   }
 </style>
 </head>
-<body>
+<body class="sem-sessao">
 
 <!-- Ícones (traço, 24x24) -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -408,6 +476,10 @@
   <symbol id="i-upload" viewBox="0 0 24 24"><path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/></symbol>
   <symbol id="i-key" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></symbol>
   <symbol id="i-inbox" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
   <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
 </svg>
 
@@ -425,12 +497,22 @@
       <button class="tab-btn" data-tab="tab-xml"><svg class="ic"><use href="#i-file-up"/></svg>Importar XML da NF-e</button>
       <button class="tab-btn" data-tab="tab-manual"><svg class="ic"><use href="#i-pen"/></svg>Digitar dados da nota</button>
       <div class="nav-group">Configurar</div>
-      <button class="tab-btn" data-tab="tab-empresas"><svg class="ic"><use href="#i-building"/></svg>Empresas e certificado</button>
+      <button class="tab-btn" data-tab="tab-empresas" data-admin><svg class="ic"><use href="#i-building"/></svg>Empresas e certificado</button>
+      <button class="tab-btn" data-tab="tab-acesso" data-admin><svg class="ic"><use href="#i-users"/></svg>Usuários e acesso</button>
+      <button class="tab-btn" data-tab="tab-backup" data-admin><svg class="ic"><use href="#i-database"/></svg>Backup</button>
       <button class="tab-btn" data-tab="tab-api"><svg class="ic"><use href="#i-code"/></svg>Integração (API)</button>
     </nav>
     <div class="sidebar-foot">
       <div class="env-pill" id="env-pill"><span class="dot"></span><div>Verificando ambiente…</div></div>
       <div class="cert-mini" id="cert-mini"><span class="dot"></span><div>Certificado…</div></div>
+      <div class="user-chip" id="user-chip">
+        <span class="av" id="user-av">?</span>
+        <div><span id="user-nome">—</span><small id="user-perfil"></small></div>
+        <div class="acoes">
+          <button title="Trocar minha senha" onclick="abrirTrocaSenha()"><svg class="ic ic-sm"><use href="#i-lock"/></svg></button>
+          <button title="Sair" onclick="sair()"><svg class="ic ic-sm"><use href="#i-logout"/></svg></button>
+        </div>
+      </div>
     </div>
   </aside>
 
@@ -746,6 +828,133 @@
     </div>
   </section>
 
+  <!-- ── Usuários e acesso ────────────────────────────────────────── -->
+  <section id="tab-acesso" class="tab-panel">
+    <div class="page-head">
+      <div>
+        <h1>Usuários e acesso</h1>
+        <p>Quem pode entrar no sistema e os tokens que o ERP usa para chamar a API.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="justify-content:space-between">
+        <span style="display:flex;align-items:center;gap:.55rem"><svg class="ic"><use href="#i-users"/></svg>Usuários</span>
+        <button class="btn btn-primary btn-sm" onclick="abrirNovoUsuario()"><svg class="ic ic-sm"><use href="#i-plus"/></svg>Novo usuário</button>
+      </h2>
+      <p class="card-sub"><strong>Administrador</strong>: tudo, inclusive empresas, certificado, usuários e backup.
+        <strong>Operador</strong>: emite, consulta e imprime guias.</p>
+      <div style="overflow-x:auto">
+        <table class="tbl">
+          <thead><tr><th>Nome</th><th>Login</th><th>Perfil</th><th>Situação</th><th>Último acesso</th><th></th></tr></thead>
+          <tbody id="us-body"><tr><td colspan="6" class="tbl-vazio">Carregando…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="justify-content:space-between">
+        <span style="display:flex;align-items:center;gap:.55rem"><svg class="ic"><use href="#i-key"/></svg>Tokens de API (integração)</span>
+        <button class="btn btn-primary btn-sm" onclick="abrirNovoToken()"><svg class="ic ic-sm"><use href="#i-plus"/></svg>Novo token</button>
+      </h2>
+      <p class="card-sub">O ERP envia o token no cabeçalho <code>Authorization: Bearer &lt;token&gt;</code>.
+        O token dá acesso apenas a emitir e consultar guias. Revogue os que não forem mais usados.</p>
+      <div style="overflow-x:auto">
+        <table class="tbl">
+          <thead><tr><th>Nome</th><th>Início do token</th><th>Criado</th><th>Último uso</th><th>Situação</th><th></th></tr></thead>
+          <tbody id="tk-body"><tr><td colspan="6" class="tbl-vazio">Carregando…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Backup ───────────────────────────────────────────────────── -->
+  <section id="tab-backup" class="tab-panel">
+    <div class="page-head">
+      <div>
+        <h1>Backup</h1>
+        <p>Cópia de guias, empresas, usuários e certificados. Os backups ficam guardados no servidor e podem ser baixados em qualquer computador.</p>
+      </div>
+      <div class="head-actions">
+        <button class="btn btn-primary" id="bk-btn-agora" onclick="gerarBackupAgora(this)"><svg class="ic"><use href="#i-download"/></svg>Fazer backup agora</button>
+      </div>
+    </div>
+
+    <div id="bk-ultimo" style="margin-bottom:1rem"></div>
+
+    <div class="grid-2c">
+      <div class="card">
+        <h2><svg class="ic"><use href="#i-clock"/></svg>Backup automático</h2>
+        <label class="switch" style="margin-bottom:1.1rem">
+          <input type="checkbox" id="bk-ativo"><span class="trilho"></span>Ativar backup automático
+        </label>
+        <div class="field" style="margin-bottom:1rem">
+          <label>Dias da semana</label>
+          <div class="dias" id="bk-dias"></div>
+        </div>
+        <div class="field" style="margin-bottom:1rem">
+          <label for="bk-hora-nova">Horários (horário de Brasília)</label>
+          <div class="horarios" id="bk-horarios"></div>
+          <div style="display:flex;gap:.5rem;margin-top:.5rem;max-width:260px">
+            <input type="time" id="bk-hora-nova" value="23:00">
+            <button class="btn btn-secondary" onclick="adicionarHorario()">Adicionar</button>
+          </div>
+        </div>
+        <div class="grid" style="margin-bottom:1rem">
+          <div class="field">
+            <label for="bk-manter">Guardar os últimos</label>
+            <input type="number" id="bk-manter" min="1" max="365" value="30">
+            <span class="hint">Backups mais antigos são apagados</span>
+          </div>
+          <div class="field">
+            <label for="bk-certs">Certificados</label>
+            <select id="bk-certs">
+              <option value="true">Incluir certificados A1</option>
+              <option value="false">Não incluir</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="bk-senha">Senha de proteção dos backups</label>
+          <input type="password" id="bk-senha" placeholder="Deixe em branco para manter a atual" autocomplete="new-password">
+          <span class="hint" id="bk-senha-hint"></span>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="salvarBackupConfig(this)">Salvar agendamento</button>
+          <button class="btn btn-secondary" id="bk-remover-senha" onclick="removerSenhaBackup()" style="display:none">Remover senha</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><svg class="ic"><use href="#i-upload"/></svg>Restaurar backup</h2>
+        <div class="info-box bad" style="margin-bottom:1rem">
+          <svg class="ic"><use href="#i-alert"/></svg>
+          <span>Restaurar <strong>substitui todos os dados atuais</strong> (guias, empresas, usuários e tokens) pelos do backup.
+            Depois disso, todos precisam entrar de novo com os usuários que existiam no backup.</span>
+        </div>
+        <div class="field" style="margin-bottom:.8rem">
+          <label for="rs-arquivo">Arquivo de backup (.zip ou .gnrebak)</label>
+          <input type="file" id="rs-arquivo" accept=".zip,.gnrebak" style="height:auto;padding:.45rem">
+        </div>
+        <div class="field" style="margin-bottom:.8rem">
+          <label for="rs-senha">Senha do backup (se tiver)</label>
+          <input type="password" id="rs-senha" autocomplete="off">
+        </div>
+        <button class="btn btn-danger" onclick="restaurarBackup(this)">Restaurar este backup</button>
+      </div>
+    </div>
+
+    <div class="card table-card">
+      <div style="padding:1rem 1.2rem .2rem"><h2 style="margin:0">Backups guardados no servidor</h2></div>
+      <div style="overflow-x:auto">
+        <table class="tbl">
+          <thead><tr><th>Data</th><th>Origem</th><th>Tamanho</th><th>Proteção</th><th></th></tr></thead>
+          <tbody id="bk-body"><tr><td colspan="5" class="tbl-vazio">Carregando…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
   <!-- ── Integração (API) ─────────────────────────────────────────── -->
   <section id="tab-api" class="tab-panel">
     <div class="page-head">
@@ -759,6 +968,9 @@
     </div>
     <div class="card">
       <div class="endpoint"><span class="method">POST</span><code>/api/gerar/json</code><span>Content-Type: application/json · uma NF-e por requisição</span></div>
+      <div class="info-box" style="margin-bottom:1rem"><svg class="ic"><use href="#i-key"/></svg>
+        <span>O ERP precisa enviar um token em cada chamada: <code>Authorization: Bearer &lt;token&gt;</code>.
+          Crie o token em <strong>Usuários e acesso</strong> (administrador). Nesta tela o teste usa o seu login.</span></div>
       <div class="field">
         <label for="json-body">Corpo da requisição (JSON)</label>
         <textarea class="json-editor" id="json-body" spellcheck="false"></textarea>
@@ -840,6 +1052,48 @@
   <div class="drawer-foot" id="dr-foot"></div>
 </aside>
 
+<!-- Login / primeiro acesso -->
+<div class="login-screen" id="login-screen" hidden>
+  <form class="login-box" id="login-form" onsubmit="event.preventDefault(); enviarLogin()">
+    <div class="brand">
+      <div class="brand-mark">G</div>
+      <div><strong>Guias DIFAL</strong><span>GNRE · DARE-SP · DUA-ES</span></div>
+    </div>
+    <h1 id="lg-titulo">Entrar</h1>
+    <p class="sub" id="lg-sub">Use seu usuário e senha.</p>
+    <div class="field" id="lg-campo-nome" hidden>
+      <label for="lg-nome">Seu nome</label>
+      <input id="lg-nome" autocomplete="name">
+    </div>
+    <div class="field">
+      <label for="lg-login">Usuário</label>
+      <input id="lg-login" autocomplete="username" autocapitalize="none" required>
+    </div>
+    <div class="field">
+      <label for="lg-senha">Senha</label>
+      <input id="lg-senha" type="password" autocomplete="current-password" required>
+    </div>
+    <div class="field" id="lg-campo-senha2" hidden>
+      <label for="lg-senha2">Repita a senha</label>
+      <input id="lg-senha2" type="password" autocomplete="new-password">
+    </div>
+    <button class="btn btn-primary" id="lg-btn" type="submit">Entrar</button>
+    <div class="login-erro" id="lg-erro" role="alert"></div>
+  </form>
+</div>
+
+<!-- Modal genérico -->
+<div class="modal-bd" id="modal" hidden onclick="if (event.target === this) fecharModal()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-titulo">
+    <div class="modal-head">
+      <h2 id="modal-titulo"></h2>
+      <button class="btn btn-secondary btn-sm btn-icon" title="Fechar" onclick="fecharModal()"><svg class="ic ic-sm"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="modal-body" id="modal-corpo"></div>
+    <div class="modal-foot" id="modal-acoes"></div>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
@@ -865,8 +1119,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Load UF rates for display
-  fetch('/api/ufs').then(r => r.json()).then(d => { ufRates = d; }).catch(() => {});
 
   // Drag-and-drop
   const dz = document.getElementById('dropzone');
@@ -890,10 +1142,9 @@ document.addEventListener('DOMContentLoaded', () => {
   while ([0, 6].includes(venc.getDay())) venc.setDate(venc.getDate() + 1);
   document.getElementById('m-data-pag').value = iso(venc);
 
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharDrawer(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { fecharDrawer(); fecharModal(); } });
 
-  carregarStatusSistema();
-  carregarGuias();
+  iniciarSessao();
   loadJsonExample();
 });
 
@@ -906,6 +1157,8 @@ function switchTab(tabId) {
   if (tabId === 'tab-guias') carregarGuias();
   if (tabId === 'tab-empresas') carregarEmpresas();
   if (tabId === 'tab-manual') carregarEmpresasEmitente();
+  if (tabId === 'tab-acesso') carregarAcesso();
+  if (tabId === 'tab-backup') carregarBackup();
   window.scrollTo({ top: 0 });
 }
 
@@ -1362,6 +1615,407 @@ function fecharDrawer() {
   dr.classList.remove('open');
   dr.setAttribute('aria-hidden', 'true');
   document.getElementById('drawer-bd').classList.remove('open');
+}
+
+// ── Login e sessão ─────────────────────────────────────────────────────────────
+let _usuario = null;
+let _sessaoVerificada = false;
+let _modoSetup = false;
+const _fetchOriginal = window.fetch.bind(window);
+
+// Qualquer 401 depois do login (sessão expirada) volta para a tela de entrada
+window.fetch = async (...args) => {
+  const res = await _fetchOriginal(...args);
+  const url = String(args[0]?.url || args[0] || '');
+  if (res.status === 401 && _sessaoVerificada && !url.includes('/api/auth/')) mostrarLogin();
+  return res;
+};
+
+async function iniciarSessao() {
+  try {
+    const st = await (await _fetchOriginal('/api/auth/estado')).json();
+    _sessaoVerificada = true;
+    if (st.precisa_setup) return mostrarLogin(true);
+    if (!st.usuario) return mostrarLogin();
+    entrarNoSistema(st.usuario);
+  } catch {
+    _sessaoVerificada = true;
+    mostrarLogin();
+  }
+}
+
+function mostrarLogin(setup = false) {
+  _modoSetup = setup;
+  _usuario = null;
+  fecharDrawer();
+  fecharModal();
+  document.body.classList.add('sem-sessao');
+  document.getElementById('login-screen').hidden = false;
+  document.getElementById('lg-titulo').textContent = setup ? 'Primeiro acesso' : 'Entrar';
+  document.getElementById('lg-sub').textContent = setup
+    ? 'Crie o usuário administrador do sistema. Use uma senha com pelo menos 8 caracteres.'
+    : 'Use seu usuário e senha.';
+  document.getElementById('lg-campo-nome').hidden = !setup;
+  document.getElementById('lg-campo-senha2').hidden = !setup;
+  document.getElementById('lg-senha').autocomplete = setup ? 'new-password' : 'current-password';
+  document.getElementById('lg-btn').textContent = setup ? 'Criar administrador e entrar' : 'Entrar';
+  document.getElementById('lg-erro').textContent = '';
+  document.getElementById('lg-senha').value = '';
+  setTimeout(() => document.getElementById(setup ? 'lg-nome' : 'lg-login').focus(), 50);
+}
+
+async function enviarLogin() {
+  const erro = document.getElementById('lg-erro');
+  const btn = document.getElementById('lg-btn');
+  const login = document.getElementById('lg-login').value.trim();
+  const senha = document.getElementById('lg-senha').value;
+  erro.textContent = '';
+  let url = '/api/auth/login', body = { login, senha };
+  if (_modoSetup) {
+    const nome = document.getElementById('lg-nome').value.trim();
+    if (senha.length < 8) { erro.textContent = 'A senha precisa ter pelo menos 8 caracteres.'; return; }
+    if (senha !== document.getElementById('lg-senha2').value) { erro.textContent = 'As senhas não conferem.'; return; }
+    if (nome.length < 2) { erro.textContent = 'Informe seu nome.'; return; }
+    url = '/api/auth/setup';
+    body = { nome, login, senha };
+  }
+  setLoading(btn, true, 'Entrando…');
+  try {
+    const res = await _fetchOriginal(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(apiErro(data));
+    entrarNoSistema(data);
+  } catch (e) {
+    erro.textContent = e.message;
+  } finally {
+    setLoading(btn, false);
+  }
+}
+
+function entrarNoSistema(u) {
+  _usuario = u;
+  document.body.classList.remove('sem-sessao');
+  document.body.classList.toggle('perfil-operador', u.perfil !== 'admin');
+  document.getElementById('login-screen').hidden = true;
+  document.getElementById('user-av').textContent = (u.nome || u.login || '?').trim()[0].toUpperCase();
+  document.getElementById('user-nome').textContent = u.nome;
+  document.getElementById('user-perfil').textContent = `${u.login} · ${u.perfil === 'admin' ? 'administrador' : 'operador'}`;
+  fetch('/api/ufs').then(r => r.json()).then(d => { ufRates = d; }).catch(() => {});
+  carregarStatusSistema();
+  const ativa = document.querySelector('.tab-btn.active');
+  const tab = ativa && !(u.perfil !== 'admin' && ativa.hasAttribute('data-admin')) ? ativa.dataset.tab : 'tab-guias';
+  switchTab(tab);
+}
+
+async function sair() {
+  await _fetchOriginal('/api/auth/logout', { method: 'POST' }).catch(() => {});
+  location.reload();
+}
+
+function abrirTrocaSenha() {
+  abrirModal('Trocar minha senha', `
+    <div class="field"><label for="ts-atual">Senha atual</label><input type="password" id="ts-atual" autocomplete="current-password"></div>
+    <div class="field"><label for="ts-nova">Nova senha</label><input type="password" id="ts-nova" autocomplete="new-password"><span class="hint">Pelo menos 8 caracteres</span></div>
+    <div class="field"><label for="ts-nova2">Repita a nova senha</label><input type="password" id="ts-nova2" autocomplete="new-password"></div>`,
+    `<button class="btn btn-secondary" onclick="fecharModal()">Cancelar</button>
+     <button class="btn btn-primary" onclick="salvarTrocaSenha(this)">Salvar nova senha</button>`);
+  document.getElementById('ts-atual').focus();
+}
+
+async function salvarTrocaSenha(btn) {
+  const nova = document.getElementById('ts-nova').value;
+  if (nova.length < 8) return showToast('A nova senha precisa ter pelo menos 8 caracteres.', 'error');
+  if (nova !== document.getElementById('ts-nova2').value) return showToast('As senhas não conferem.', 'error');
+  await enviarJSON('/api/auth/senha', 'POST', { senha_atual: document.getElementById('ts-atual').value, nova_senha: nova }, btn,
+    () => { fecharModal(); showToast('Senha alterada.', 'success'); });
+}
+
+// ── Modal e utilitários ────────────────────────────────────────────────────────
+function abrirModal(titulo, corpo, acoes) {
+  document.getElementById('modal-titulo').textContent = titulo;
+  document.getElementById('modal-corpo').innerHTML = corpo;
+  document.getElementById('modal-acoes').innerHTML = acoes;
+  document.getElementById('modal').hidden = false;
+}
+
+function fecharModal() {
+  const m = document.getElementById('modal');
+  if (m) m.hidden = true;
+}
+
+async function enviarJSON(url, method, body, btn, aoConcluir) {
+  setLoading(btn, true, 'Salvando…');
+  try {
+    const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+    const data = await res.json();
+    if (!res.ok) throw new Error(apiErro(data));
+    aoConcluir && aoConcluir(data);
+    return data;
+  } catch (e) {
+    showToast('Erro: ' + e.message, 'error');
+  } finally {
+    setLoading(btn, false);
+  }
+}
+
+function fmtBytes(n) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+// ── Usuários e tokens ──────────────────────────────────────────────────────────
+let _usuarios = [];
+
+async function carregarAcesso() {
+  try {
+    const [us, tk] = await Promise.all([fetch('/api/usuarios').then(r => r.json()), fetch('/api/tokens').then(r => r.json())]);
+    _usuarios = Array.isArray(us) ? us : [];
+    document.getElementById('us-body').innerHTML = _usuarios.length ? _usuarios.map(u => `
+      <tr>
+        <td><strong>${esc(u.nome)}</strong>${_usuario && u.id === _usuario.id ? ' <span class="hint">(você)</span>' : ''}</td>
+        <td>${esc(u.login)}</td>
+        <td><span class="guide-badge ${u.perfil === 'admin' ? 'badge-gnre' : 'badge-dare'}">${u.perfil === 'admin' ? 'Administrador' : 'Operador'}</span></td>
+        <td>${u.ativo ? '<span class="guide-badge badge-gerada">Ativo</span>' : '<span class="guide-badge badge-erro">Inativo</span>'}</td>
+        <td>${esc(u.ultimo_acesso || '—')}</td>
+        <td><div class="acoes">
+          <button class="btn btn-secondary btn-sm" onclick="abrirEditarUsuario(${u.id})">Editar</button>
+          ${_usuario && u.id !== _usuario.id ? `<button class="btn btn-secondary btn-sm" onclick="alternarUsuario(${u.id}, ${!u.ativo}, this)">${u.ativo ? 'Desativar' : 'Reativar'}</button>` : ''}
+        </div></td>
+      </tr>`).join('') : '<tr><td colspan="6" class="tbl-vazio">Nenhum usuário.</td></tr>';
+    const tokens = Array.isArray(tk) ? tk : [];
+    document.getElementById('tk-body').innerHTML = tokens.length ? tokens.map(t => `
+      <tr>
+        <td><strong>${esc(t.nome)}</strong></td>
+        <td><code>${esc(t.prefixo)}…</code></td>
+        <td>${esc(t.criado_em || '')}<span class="gs-sub hint">${esc(t.criado_por || '')}</span></td>
+        <td>${esc(t.ultimo_uso || 'nunca usado')}</td>
+        <td>${t.ativo ? '<span class="guide-badge badge-gerada">Ativo</span>' : '<span class="guide-badge badge-erro">Revogado</span>'}</td>
+        <td><div class="acoes">${t.ativo ? `<button class="btn btn-danger btn-sm" onclick="revogarToken(${t.id}, this)">Revogar</button>` : ''}</div></td>
+      </tr>`).join('') : '<tr><td colspan="6" class="tbl-vazio">Nenhum token criado. Crie um para o ERP chamar a API.</td></tr>';
+  } catch (e) {
+    showToast('Erro ao carregar usuários: ' + e.message, 'error');
+  }
+}
+
+function _formUsuario(u) {
+  return `
+    <div class="field"><label for="uf-nome">Nome</label><input id="uf-nome" value="${esc(u?.nome || '')}"></div>
+    ${u ? '' : '<div class="field"><label for="uf-login">Login</label><input id="uf-login" autocapitalize="none"><span class="hint">Usado para entrar. Ex.: maria</span></div>'}
+    <div class="field"><label for="uf-perfil">Perfil</label>
+      <select id="uf-perfil">
+        <option value="operador" ${u?.perfil === 'operador' ? 'selected' : ''}>Operador — emite, consulta e imprime guias</option>
+        <option value="admin" ${u?.perfil === 'admin' ? 'selected' : ''}>Administrador — acesso total</option>
+      </select></div>
+    <div class="field"><label for="uf-senha">${u ? 'Nova senha (opcional)' : 'Senha'}</label>
+      <input type="password" id="uf-senha" autocomplete="new-password"><span class="hint">Pelo menos 8 caracteres${u ? ' — deixe em branco para manter' : ''}</span></div>`;
+}
+
+function abrirNovoUsuario() {
+  abrirModal('Novo usuário', _formUsuario(null),
+    `<button class="btn btn-secondary" onclick="fecharModal()">Cancelar</button>
+     <button class="btn btn-primary" onclick="salvarNovoUsuario(this)">Criar usuário</button>`);
+  document.getElementById('uf-nome').focus();
+}
+
+async function salvarNovoUsuario(btn) {
+  const body = {
+    nome: document.getElementById('uf-nome').value.trim(),
+    login: document.getElementById('uf-login').value.trim(),
+    perfil: document.getElementById('uf-perfil').value,
+    senha: document.getElementById('uf-senha').value,
+  };
+  if (body.senha.length < 8) return showToast('A senha precisa ter pelo menos 8 caracteres.', 'error');
+  await enviarJSON('/api/usuarios', 'POST', body, btn, () => { fecharModal(); showToast('Usuário criado.', 'success'); carregarAcesso(); });
+}
+
+function abrirEditarUsuario(id) {
+  const u = _usuarios.find(x => x.id === id);
+  if (!u) return;
+  abrirModal(`Editar ${u.nome}`, _formUsuario(u),
+    `<button class="btn btn-secondary" onclick="fecharModal()">Cancelar</button>
+     <button class="btn btn-primary" onclick="salvarEdicaoUsuario(${id}, this)">Salvar</button>`);
+}
+
+async function salvarEdicaoUsuario(id, btn) {
+  const body = { nome: document.getElementById('uf-nome').value.trim(), perfil: document.getElementById('uf-perfil').value };
+  const senha = document.getElementById('uf-senha').value;
+  if (senha) {
+    if (senha.length < 8) return showToast('A senha precisa ter pelo menos 8 caracteres.', 'error');
+    body.nova_senha = senha;
+  }
+  await enviarJSON(`/api/usuarios/${id}`, 'PUT', body, btn, () => { fecharModal(); showToast('Usuário atualizado.', 'success'); carregarAcesso(); });
+}
+
+async function alternarUsuario(id, ativo, btn) {
+  if (!ativo && !confirm('Desativar este usuário? Ele não conseguirá mais entrar.')) return;
+  await enviarJSON(`/api/usuarios/${id}`, 'PUT', { ativo }, btn, () => carregarAcesso());
+}
+
+function abrirNovoToken() {
+  abrirModal('Novo token de API', `
+    <div class="field"><label for="tk-nome">Identificação</label><input id="tk-nome" placeholder="Ex.: ERP da loja"><span class="hint">Para saber depois qual sistema usa este token</span></div>`,
+    `<button class="btn btn-secondary" onclick="fecharModal()">Cancelar</button>
+     <button class="btn btn-primary" onclick="criarToken(this)">Criar token</button>`);
+  document.getElementById('tk-nome').focus();
+}
+
+async function criarToken(btn) {
+  const nome = document.getElementById('tk-nome').value.trim();
+  if (nome.length < 2) return showToast('Informe a identificação do token.', 'error');
+  await enviarJSON('/api/tokens', 'POST', { nome }, btn, data => {
+    abrirModal('Token criado', `
+      <div class="info-box" style="margin-bottom:.4rem">${ic('alert')}<span>Copie agora e guarde no ERP. <strong>Por segurança, ele não será mostrado de novo.</strong></span></div>
+      <div class="token-show" id="tk-valor">${esc(data.token)}</div>
+      <p class="hint">Envie em cada chamada: <code>Authorization: Bearer ${esc(data.prefixo)}…</code></p>`,
+      `<button class="btn btn-secondary" onclick="fecharModal()">Fechar</button>
+       <button class="btn btn-primary" onclick="copyText(document.getElementById('tk-valor').textContent)">${ic('copy', 'ic-sm')}Copiar token</button>`);
+    carregarAcesso();
+  });
+}
+
+async function revogarToken(id, btn) {
+  if (!confirm('Revogar este token? O sistema que usa ele deixará de conseguir emitir guias.')) return;
+  await enviarJSON(`/api/tokens/${id}`, 'DELETE', null, btn, () => { showToast('Token revogado.'); carregarAcesso(); });
+}
+
+// ── Backup ─────────────────────────────────────────────────────────────────────
+const _DIAS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+let _bkHorarios = [];
+
+async function carregarBackup() {
+  let d;
+  try {
+    const res = await fetch('/api/backup');
+    d = await res.json();
+    if (!res.ok) throw new Error(apiErro(d));
+  } catch (e) {
+    return showToast('Erro ao carregar backup: ' + e.message, 'error');
+  }
+  const c = d.config;
+  document.getElementById('bk-ativo').checked = c.ativo;
+  document.getElementById('bk-dias').innerHTML = _DIAS.map((n, i) =>
+    `<label><input type="checkbox" value="${i}" ${c.dias.includes(i) ? 'checked' : ''}><span>${n}</span></label>`).join('');
+  _bkHorarios = [...c.horarios];
+  renderHorarios();
+  document.getElementById('bk-manter').value = c.manter;
+  document.getElementById('bk-certs').value = String(c.incluir_certificados);
+  document.getElementById('bk-senha').value = '';
+  document.getElementById('bk-senha-hint').innerHTML = c.tem_senha
+    ? `${ic('lock', 'ic-sm')} Os backups estão protegidos por senha. Guarde essa senha: sem ela não é possível restaurar.`
+    : 'Sem senha. Recomendado definir uma, porque o backup leva o certificado A1 da empresa.';
+  document.getElementById('bk-remover-senha').style.display = c.tem_senha ? '' : 'none';
+
+  const u = d.ultimo;
+  document.getElementById('bk-ultimo').innerHTML = u
+    ? `<div class="info-box ${u.ok ? 'ok' : 'bad'}">${ic(u.ok ? 'check' : 'alert')}<span>
+        Último backup ${u.origem === 'agendado' ? 'automático' : 'manual'}: <strong>${esc(u.quando || '')}</strong>
+        ${u.ok ? `· ${esc(u.arquivo || '')} (${fmtBytes(u.tamanho || 0)})` : `· <strong>falhou</strong>: ${esc(u.erro || '')}`}
+        ${c.ativo ? `· Automático ativo: ${c.dias.map(i => _DIAS[i]).join(', ')} às ${c.horarios.join(', ')}` : '· Backup automático desligado'}
+      </span></div>`
+    : `<div class="info-box">${ic('clock')}<span>Nenhum backup feito ainda. Agora são ${esc(d.agora)} (horário de Brasília).</span></div>`;
+
+  document.getElementById('bk-body').innerHTML = d.backups.length ? d.backups.map(b => `
+    <tr>
+      <td><strong>${esc(b.criado_em)}</strong><span class="gs-sub hint">${esc(b.nome)}</span></td>
+      <td>${b.origem === 'agendado' ? 'Automático' : 'Manual'}</td>
+      <td>${fmtBytes(b.tamanho)}</td>
+      <td>${b.cifrado ? `<span class="guide-badge badge-gerada">${ic('lock', 'ic-sm')}Com senha</span>` : '<span class="guide-badge badge-pendente">Sem senha</span>'}</td>
+      <td><div class="acoes">
+        <a class="btn btn-secondary btn-sm" href="/api/backup/download/${encodeURIComponent(b.nome)}" download>${ic('download', 'ic-sm')}Baixar</a>
+        <button class="btn btn-secondary btn-sm btn-icon" title="Apagar" onclick="apagarBackup('${esc(b.nome)}', this)">${ic('x', 'ic-sm')}</button>
+      </div></td>
+    </tr>`).join('') : '<tr><td colspan="5" class="tbl-vazio">Nenhum backup guardado ainda.</td></tr>';
+}
+
+function renderHorarios() {
+  document.getElementById('bk-horarios').innerHTML = _bkHorarios.length
+    ? _bkHorarios.map(h => `<span class="horario">${h}<button title="Remover" onclick="removerHorario('${h}')">${ic('x', 'ic-sm')}</button></span>`).join('')
+    : '<span class="hint">Nenhum horário escolhido.</span>';
+}
+
+function adicionarHorario() {
+  const h = document.getElementById('bk-hora-nova').value;
+  if (!h) return;
+  if (!_bkHorarios.includes(h)) _bkHorarios = [..._bkHorarios, h].sort();
+  renderHorarios();
+}
+
+function removerHorario(h) {
+  _bkHorarios = _bkHorarios.filter(x => x !== h);
+  renderHorarios();
+}
+
+async function salvarBackupConfig(btn) {
+  const body = {
+    ativo: document.getElementById('bk-ativo').checked,
+    dias: [...document.querySelectorAll('#bk-dias input:checked')].map(i => Number(i.value)),
+    horarios: _bkHorarios,
+    manter: Number(document.getElementById('bk-manter').value) || 30,
+    incluir_certificados: document.getElementById('bk-certs').value === 'true',
+  };
+  const senha = document.getElementById('bk-senha').value;
+  if (senha) {
+    if (senha.length < 6) return showToast('Use uma senha de backup com pelo menos 6 caracteres.', 'error');
+    body.senha = senha;
+  }
+  await enviarJSON('/api/backup/config', 'PUT', body, btn, () => { showToast('Agendamento salvo.', 'success'); carregarBackup(); });
+}
+
+async function removerSenhaBackup() {
+  if (!confirm('Remover a senha? Os próximos backups ficarão sem proteção (os já feitos continuam com a senha antiga).')) return;
+  await enviarJSON('/api/backup/config', 'PUT', { senha: '' }, null, () => { showToast('Senha removida.'); carregarBackup(); });
+}
+
+async function gerarBackupAgora(btn) {
+  setLoading(btn, true, 'Gerando backup…');
+  try {
+    const res = await fetch('/api/backup/gerar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(apiErro(data));
+    // baixa o arquivo nesta máquina
+    const a = document.createElement('a');
+    a.href = `/api/backup/download/${encodeURIComponent(data.nome)}`;
+    a.download = data.nome;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    showToast(`Backup gerado e baixado (${fmtBytes(data.tamanho)}).`, 'success');
+    carregarBackup();
+  } catch (e) {
+    showToast('Erro: ' + e.message, 'error');
+  } finally {
+    setLoading(btn, false);
+  }
+}
+
+async function apagarBackup(nome, btn) {
+  if (!confirm(`Apagar o backup ${nome} do servidor?`)) return;
+  await enviarJSON(`/api/backup/${encodeURIComponent(nome)}`, 'DELETE', null, btn, () => { showToast('Backup apagado.'); carregarBackup(); });
+}
+
+async function restaurarBackup(btn) {
+  const arq = document.getElementById('rs-arquivo').files[0];
+  if (!arq) return showToast('Escolha o arquivo de backup.', 'error');
+  const conf = prompt('Isto vai SUBSTITUIR todos os dados atuais pelos do backup.\nPara confirmar, digite RESTAURAR:');
+  if ((conf || '').trim().toUpperCase() !== 'RESTAURAR') return;
+  const fd = new FormData();
+  fd.append('arquivo', arq);
+  fd.append('senha', document.getElementById('rs-senha').value);
+  setLoading(btn, true, 'Restaurando…');
+  try {
+    const res = await fetch('/api/backup/restaurar', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(apiErro(data));
+    const t = data.manifest.tabelas || {};
+    alert(`Backup de ${new Date(data.manifest.criado_em).toLocaleString('pt-BR')} restaurado:\n` +
+          `${t.guias || 0} guias, ${t.empresas || 0} empresas, ${t.usuarios || 0} usuários, ${data.certificados_restaurados} arquivo(s) de certificado.\n\n` +
+          'Entre de novo com um usuário do backup.');
+    location.reload();
+  } catch (e) {
+    showToast('Erro: ' + e.message, 'error');
+    setLoading(btn, false);
+  }
 }
 
 // ── Shared API call ────────────────────────────────────────────────────────────

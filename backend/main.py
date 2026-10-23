@@ -33,9 +33,11 @@ from datetime import date, datetime, time
 from pathlib import Path
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
+import logging
+
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
@@ -43,6 +45,8 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 from database import get_db, init_db
+from auth import router as auth_router, autorizar, criar_admin_inicial, exige_acesso
+from backup_router import router as backup_router
 from empresa_router import router as empresa_router
 from models import FormularioManual, ResultadoGuias
 from nfe_parser import parse_nfe_xml
@@ -50,11 +54,28 @@ from difal_calculator import calcular_difal_manual
 from guide_router import gerar_guias_completo
 from uf_config import get_uf_config, UF_ALIQ_INTERNA, UF_FECP
 
+logger = logging.getLogger(__name__)
+
+
+async def _agendador_backup():
+    """Verifica a cada 30s se é dia/horário de backup automático."""
+    import backup_service
+
+    while True:
+        try:
+            await asyncio.to_thread(backup_service.executar_agendado_se_for_hora)
+        except Exception:
+            logger.exception("Erro no agendador de backup")
+        await asyncio.sleep(30)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    criar_admin_inicial()
+    tarefa = asyncio.create_task(_agendador_backup())
     yield
+    tarefa.cancel()
 
 
 app = FastAPI(
@@ -74,6 +95,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.middleware("http")
+async def controle_de_acesso(request: Request, call_next):
+    """Exige login (cookie) ou token de API em /api/* e na documentação; perfis admin/operador."""
+    if exige_acesso(request.url.path, request.method):
+        ident, erro = await asyncio.to_thread(autorizar, request)
+        if erro:
+            codigo, msg = erro.split(":", 1)
+            if request.url.path in ("/docs", "/redoc", "/openapi.json"):
+                return RedirectResponse("/")
+            return JSONResponse({"detail": msg}, status_code=int(codigo))
+        request.state.identidade = ident
+    return await call_next(request)
+
+
+app.include_router(auth_router)
+app.include_router(backup_router)
 app.include_router(empresa_router)
 
 _frontend = Path(__file__).parent.parent / "frontend"

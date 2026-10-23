@@ -97,6 +97,55 @@ class Guia(Base):
     atualizado_em = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 
+class Usuario(Base):
+    """Usuários da interface. perfil: admin (tudo) | operador (emitir e consultar guias)."""
+    __tablename__ = "usuarios"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String(120), nullable=False)
+    login = Column(String(60), unique=True, nullable=False, index=True)
+    senha_hash = Column(String(255), nullable=False)
+    perfil = Column(String(20), nullable=False, default="operador")
+    ativo = Column(Boolean, nullable=False, default=True)
+    ultimo_acesso = Column(DateTime, nullable=True)
+    criado_em = Column(DateTime, default=datetime.now)
+
+
+class Sessao(Base):
+    """Sessões de login da interface (cookie). Guarda só o hash do token."""
+    __tablename__ = "sessoes"
+
+    id = Column(Integer, primary_key=True)
+    token_hash = Column(String(64), unique=True, nullable=False, index=True)
+    usuario_id = Column(Integer, nullable=False, index=True)
+    expira_em = Column(DateTime, nullable=False)
+    criado_em = Column(DateTime, default=datetime.now)
+    ip = Column(String(64), nullable=True)
+
+
+class ApiToken(Base):
+    """Tokens de acesso para integração (ERP). Guarda só o hash; o token aparece uma vez."""
+    __tablename__ = "api_tokens"
+
+    id = Column(Integer, primary_key=True)
+    nome = Column(String(120), nullable=False)
+    prefixo = Column(String(16), nullable=False)          # início do token, para identificar
+    token_hash = Column(String(64), unique=True, nullable=False, index=True)
+    ativo = Column(Boolean, nullable=False, default=True)
+    ultimo_uso = Column(DateTime, nullable=True)
+    criado_em = Column(DateTime, default=datetime.now)
+    criado_por = Column(String(60), nullable=True)
+
+
+class Configuracao(Base):
+    """Configurações gerais em chave/valor (JSON), ex.: agendamento de backup."""
+    __tablename__ = "configuracoes"
+
+    chave = Column(String(60), primary_key=True)
+    valor = Column(Text, nullable=False)
+    atualizado_em = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
 def get_db():
     db = SessionLocal()
     try:

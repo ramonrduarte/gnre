@@ -37,12 +37,18 @@ services:
       SP_DARE_CODIGO_DIFAL: ${SP_DARE_CODIGO_DIFAL:-064-2}
       SP_PLAYWRIGHT_TIMEOUT: ${SP_PLAYWRIGHT_TIMEOUT:-30}
 
+      # ── Acesso (opcional) ──────────────────────────────────────────────────
+      # Cria o primeiro administrador se ainda não houver usuários.
+      # Sem estas variáveis, o primeiro acesso à tela pede para criar o admin.
+      GNRE_ADMIN_LOGIN: ${GNRE_ADMIN_LOGIN:-}
+      GNRE_ADMIN_SENHA: ${GNRE_ADMIN_SENHA:-}
+
       # ── Servidor ───────────────────────────────────────────────────────────
       HOST: "0.0.0.0"
       PORT: ${PORT:-8000}
 
     volumes:
-      # Certificados A1 das empresas — persistidos entre deploys e atualizações
+      # Certificados A1, backups (data/backups) e cache — persistidos entre deploys
       - gnre_certs:/app/data
 
     networks:

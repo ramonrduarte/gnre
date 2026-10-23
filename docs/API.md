@@ -8,17 +8,38 @@ do DIFAL (EC 87/2015) prontas: código de barras, linha digitável e, quando a U
 - Documentação interativa: `/docs` (Swagger) e `/redoc`
 - Uma requisição = uma NF-e. Para várias notas, faça uma chamada por nota (podem ser paralelas).
 
-> A API não tem autenticação própria. Mantenha o servidor acessível apenas na rede interna.
+## Autenticação
+
+Toda chamada à API precisa de um **token de API**, criado na interface em
+**Usuários e acesso → Tokens de API → Novo token** (somente administradores).
+O token aparece uma única vez: copie e guarde no ERP.
+
+Envie em todas as requisições, de uma destas formas:
+
+```
+Authorization: Bearer gnre_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+X-API-Key: gnre_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+| HTTP | Significado |
+|---|---|
+| 401 | Token ausente, inválido ou revogado |
+| 403 | O token não tem acesso a essa rota (tokens só emitem e consultam guias) |
+
+O token tem acesso a: `/api/gerar/*`, `/api/guias*`, `/api/gnre/*`, `/api/uf*`.
+Cadastro de empresas, usuários e backup ficam só na interface, para administradores.
+Revogue na mesma tela qualquer token que não for mais usado.
 
 ---
 
 ## Pré-requisitos (uma vez)
 
-1. Cadastrar a empresa emitente na aba **Empresas** da interface, com endereço e
+1. Criar um **token de API** em Usuários e acesso (ver Autenticação).
+2. Cadastrar a empresa emitente na aba **Empresas** da interface, com endereço e
    **certificado A1 (e-CNPJ)**. O certificado é usado no WebService GNRE e no DUA-ES.
-2. CNPJ habilitado no WebService do portal GNRE
+3. CNPJ habilitado no WebService do portal GNRE
    (gnre.pe.gov.br → Automação → *Solicitar uso do WebService*), em produção e/ou homologação.
-3. Variável `GNRE_AMBIENTE`: `1` = produção (guias reais), `2` = homologação (testes, não pagar).
+4. Variável `GNRE_AMBIENTE`: `1` = produção (guias reais), `2` = homologação (testes, não pagar).
 
 Para ES (DUA-e) o CNPJ também precisa estar autorizado pela SEFAZ-ES (suare@sefaz.es.gov.br).
 
@@ -63,6 +84,7 @@ detalhamento, FCP no mesmo guia ou em guia separada) são lidas do próprio port
 
 ```bash
 curl -X POST http://192.168.0.110:8002/api/gerar/json \
+  -H "Authorization: Bearer $GNRE_TOKEN" \
   -H "Content-Type: application/json" \
   -d @nota.json
 ```
@@ -188,6 +210,7 @@ antes de consultar o resultado). Configure o timeout do cliente HTTP para **pelo
 
 | HTTP | Quando |
 |---|---|
+| 401 / 403 | Token ausente/inválido, ou sem acesso à rota (ver Autenticação) |
 | 422 | JSON inválido ou campo obrigatório ausente. `detail[].msg` explica o campo |
 | 500 | Falha inesperada; `detail` traz a mensagem |
 
@@ -207,7 +230,7 @@ Consulta as guias já emitidas (o mesmo que a aba **Guias emitidas** da interfac
 | `limite`, `offset` | `100`, `0` | Paginação (máx. 500 por página) |
 
 ```bash
-curl "http://192.168.0.110:8002/api/guias?busca=43261092613413000160550010000123451000123459"
+curl -H "Authorization: Bearer $GNRE_TOKEN" "http://192.168.0.110:8002/api/guias?busca=43261092613413000160550010000123451000123459"
 ```
 
 ```json
@@ -242,7 +265,7 @@ Outras rotas do histórico:
 Para guias que voltaram com `status: "processando"`.
 
 ```bash
-curl "http://192.168.0.110:8002/api/gnre/resultado/26000000039396?cnpj=92613413000160"
+curl -H "Authorization: Bearer $GNRE_TOKEN" "http://192.168.0.110:8002/api/gnre/resultado/26000000039396?cnpj=92613413000160"
 ```
 
 ```json
@@ -268,7 +291,7 @@ no ambiente configurado: detalhamentos, produtos, campos extras, se aceita PIX, 
 no mesmo guia (`exige_valor_fecp`). `existe: false` = a UF não emite essa receita pelo GNRE.
 
 ```bash
-curl "http://192.168.0.110:8002/api/gnre/config/MT/100102"
+curl -H "Authorization: Bearer $GNRE_TOKEN" "http://192.168.0.110:8002/api/gnre/config/MT/100102"
 ```
 
 ---
@@ -279,7 +302,7 @@ Se for mais simples para o ERP, envie o próprio XML autorizado (`nfeProc` ou `N
 como arquivo multipart. Todos os campos acima são lidos do XML.
 
 ```bash
-curl -X POST http://192.168.0.110:8002/api/gerar/xml -F "file=@43261092613413000160550010000123451000123459-procNFe.xml"
+curl -X POST http://192.168.0.110:8002/api/gerar/xml -H "Authorization: Bearer $GNRE_TOKEN" -F "file=@43261092613413000160550010000123451000123459-procNFe.xml"
 ```
 
 A resposta é igual à de `/api/gerar/json`.

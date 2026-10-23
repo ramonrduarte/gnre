@@ -171,3 +171,31 @@ referência, campos extras, detalhamento, FCP no mesmo guia) são consultadas no
 `backend/uf_config.py` só é usada quando não há certificado para consultar o portal.
 
 SP e ES não estão habilitados no GNRE (GnreConfigUF retorna 999): SP usa DARE-ICMS e ES usa DUA-e.
+
+---
+
+## Acesso e segurança
+
+- A interface e a API exigem autenticação. `/api/status` continua público (healthcheck).
+- **Primeiro acesso:** sem nenhum usuário cadastrado, a tela pede a criação do administrador.
+  Faça isso logo após o primeiro deploy. Alternativa: definir `GNRE_ADMIN_LOGIN` e
+  `GNRE_ADMIN_SENHA` no Portainer; o admin é criado na inicialização se não houver usuários.
+- Perfis: **administrador** (empresas, certificado, usuários, tokens, backup) e
+  **operador** (emitir, consultar e imprimir guias).
+- Sessão por cookie HttpOnly, válida por 12h e renovada com o uso. Após 5 senhas erradas,
+  o IP fica bloqueado por 5 minutos.
+- ERP: token de API (`Authorization: Bearer <token>`) criado em **Usuários e acesso**.
+  Detalhes em [docs/API.md](docs/API.md).
+
+## Backup
+
+Tela **Backup** (administradores):
+
+- **Fazer backup agora:** gera e já baixa o arquivo no computador onde a tela está aberta.
+- **Backup automático:** escolha dias da semana e horários (horário de Brasília) e quantos backups guardar.
+- **Senha de proteção:** com senha, o backup é cifrado (`.gnrebak`). É recomendado, porque o
+  backup inclui o certificado A1. Sem a senha não é possível restaurar.
+- **Restaurar:** envie um arquivo de backup para substituir todos os dados (guias, empresas,
+  usuários, tokens e certificados).
+- Os arquivos ficam em `data/backups`, dentro do volume persistente `gnre_certs` (`/app/data`).
+  O formato não depende do banco, então serve para migrar entre servidores (Postgres ou SQLite).
